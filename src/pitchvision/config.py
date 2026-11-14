@@ -9,6 +9,8 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+# hand-maintained, committed corrections and known source issues (win over everything)
+OVERRIDES = REPO_ROOT / "overrides"
 
 
 @dataclass(frozen=True)

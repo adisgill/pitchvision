@@ -31,7 +31,22 @@ SB_SAMPLE_SEASONS = [
 SB_EVENTS_PER_SEASON = 2  # events + lineups (+ 360 where present) for the first N matches
 
 
+# Tier A full seasons (spec 1.1): (competition_id, season_id)
+SB_TIER_A = [
+    (2, 27), (11, 27), (12, 27), (7, 27), (9, 27),  # 2015-16 big five (men)
+    (37, 4), (37, 42), (37, 90), (37, 281),  # WSL 2018-19, 2019-20, 2020-21, 2023-24
+    (135, 281), (182, 281), (131, 281),  # Frauen-Bundesliga, Liga F, Serie A Women 2023-24
+    (49, 107),  # NWSL 2023
+]  # fmt: skip
+
+
+def _sb_commit(comp: int, season: int) -> str:
+    return SB_COMMIT_BL1516 if (comp, season) == (9, 27) else SB_COMMIT
+
+
 def statsbomb(root: Path, sample: bool = True) -> list[Path]:
+    if not sample:
+        return statsbomb_full(root)
     got: list[Path] = []
     with Fetcher("statsbomb", root, min_interval=1.0) as f:
         comps = f.get(SB_RAW.format(commit=SB_COMMIT, path="competitions.json"),
@@ -55,6 +70,27 @@ def statsbomb(root: Path, sample: bool = True) -> list[Path]:
                     got.append(f.get(
                         SB_RAW.format(commit=SB_COMMIT, path=f"three-sixty/{mid}.json"),
                         f"{SB_COMMIT[:10]}/three-sixty/{mid}.json"))  # fmt: skip
+    return got
+
+
+def statsbomb_full(root: Path) -> list[Path]:
+    """Every tier-A season: match index, then events and lineups per match, stored gzipped
+    under ``full/`` (about 1.5 GB instead of about 10 GB). 360 frames are research-only and
+    not pulled here."""
+    got: list[Path] = []
+    with Fetcher("statsbomb", root, min_interval=0.5) as f:
+        got.append(f.get(SB_RAW.format(commit=SB_COMMIT, path="competitions.json"),
+                         f"{SB_COMMIT[:10]}/competitions.json"))  # fmt: skip
+        for comp, season in SB_TIER_A:
+            commit = _sb_commit(comp, season)
+            idx = f.get(SB_RAW.format(commit=commit, path=f"matches/{comp}/{season}.json"),
+                        f"{commit[:10]}/matches/{comp}/{season}.json")  # fmt: skip
+            got.append(idx)
+            for m in json.loads(idx.read_text(encoding="utf-8")):
+                mid = m["match_id"]
+                for kind in ("events", "lineups"):
+                    got.append(f.get(SB_RAW.format(commit=SB_COMMIT, path=f"{kind}/{mid}.json"),
+                                     f"full/{kind}/{mid}.json.gz"))  # fmt: skip
     return got
 
 

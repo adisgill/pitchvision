@@ -1,9 +1,8 @@
 # Metrics spec
 
-**Status: v0.1 draft for approval (2026-11-14).**
-- No metric code exists yet.
-- Once you approve this spec, implementation follows it. Any deviation found while
-  implementing goes in as a dated "*Change, <date>:*" note, and I tell you.
+**Status: v0.1, approved 2026-11-14 with every recommended decision (D1–D24).**
+- Implementation follows this spec. Any deviation found while implementing goes in as a
+  dated "*Change, <date>:*" note, and I tell you.
 - It is grounded in [`phase0/data_profile.md`](phase0/data_profile.md),
   [`phase0/source_inventory.md`](phase0/source_inventory.md) and
   [`phase0/identity_plan.md`](phase0/identity_plan.md).
@@ -20,8 +19,8 @@ Contents:
 
 ## 0. Decisions
 
-Each decision has a recommendation in bold. I'll implement the recommendations unless you
-say otherwise.
+All 24 were approved as recommended on 2026-11-14. The table is kept as the record of what
+was decided and why.
 
 | # | Decision | Options | Recommendation |
 |---|---|---|---|
@@ -101,7 +100,15 @@ the app can show what each would add.
   - **TM collapses added time into 45 and 90.** TM events have `added` = unknown, and are
     ordered within a minute by event id.
 - **Minutes played:** TM `minutes_played` (capped at 90, so team minutes = 990) is the tier-C
-  exposure. Tier A uses exact on-pitch seconds from substitution and red-card events, so a
+  exposure.
+
+  *Change, Nov 14 (Phase 1, staging):* TM team minutes are **not** always 990. Only 93-98%
+  of team-matches without a red card are within 3 of 990, because TM drops a player's
+  whole appearance row in 3-7% of team-matches (the profile wrongly inferred "exactly 990"
+  from an average). Tier-C minutes are now **derived from stints**: lineups, substitutions
+  and red cards. They agree with TM's own `minutes_played` within 1 minute for **99.98%**
+  of 719k big-five appearances. TM gives a player brought on in the 90th minute 1 minute;
+  stints give 0. Tier A uses exact on-pitch seconds from substitution and red-card events, so a
   tier-A 90 can be 96 real minutes. Per-90 rates in tier A use **real** on-pitch time; in
   tier C, nominal minutes.
 
@@ -460,6 +467,22 @@ Every rating stores `tier`, `minutes`, `league_season`, `group`.
 - Added-time events count at minute 45 or 90 (2.1).
 - Expected about 6-11 stints per match.
 
+*Change, Nov 14 (Phase 1, stints):* the ordering rules TM forces, implemented in
+`metrics/stints.py` and unit-tested:
+
+- TM event ids are hashes, so they give no order. A goal in the same minute as a
+  substitution counts **before** it, unless the scorer came on in that minute.
+- Zero-length 90th-minute stints are dropped, and their goals are attached to the
+  previous stint.
+- Match length is 120 if any event falls after minute 90.
+- 2012-13 has no lineups, so starters are the appearances minus the players brought on.
+- A match's stints are `valid` for plus-minus when every event has a minute, every stint
+  has 9-11 players a side, and the match isn't a known score issue.
+
+Result: 246,970 stints. Stint goals reconcile with the final score in ≥ 99.5% of valid
+matches in every league-season. **UECL 2021-22 to 2022-23 and EL 2012-13 have no lineups
+in the mirror** and get no stints.
+
 **Goal-RAPM**
 
 - Model: ridge regression of `Δgoals per 90` (home − away) per stint on player indicators
@@ -789,6 +812,28 @@ Phase 2 deliverable: `docs/validation.md` plus an app page.
 | Crosswalk QA | core | ambiguous ≤ 0.5% of rows; unmatched listed |
 | Ratings mean 50, SD 10 | ratings | per (league-season, group), ± 0.5 |
 | Coordinates in frame | all | 100% after clipping; clip count reported |
+
+*Change, Nov 14 (Phase 1, QA):*
+
+- **Shootouts.** TM's reported score includes penalty-shootout goals, so shootout matches
+  are excluded from score checks. Their score after 90 / 120 minutes is the goal events.
+- **Goal checks by club.** Goals are reconciled by club (own goals carry the benefiting
+  club), not just in total.
+- **Known issues.** Seven raw-source errors are listed in the committed
+  `overrides/tm_known_issues.csv` and excluded from the checks, never silently merged:
+  - two shootouts with no shootout events;
+  - two matches whose score disagrees with the goal events;
+  - three Primeira matches with no goal events.
+
+  The two score disagreements stay unresolved until they're checked against
+  football-data.co.uk.
+- **Valid-stint threshold.** The share of matches with valid stints is checked at 0.98
+  (not 0.99). Primeira 2012-13, 2016-17 and 2017-18 have events with unknown minutes in
+  1-2% of matches.
+- Overrides live in `overrides/` at the repo root (committed), not under the gitignored
+  `data/` that [identity_plan.md](phase0/identity_plan.md) named.
+
+**Current build:** 494 checks, 0 failures.
 
 ---
 

@@ -1,0 +1,8 @@
+game_id,issue,detail,resolution
+2437606,shootout_unflagged,"EL 2013-14 Betis v Sevilla: reported 3-4 includes a shootout, but TM has no shootout events",exclude from score checks; regulation score from goal events
+2456992,shootout_unflagged,"EL 2013-14 final Sevilla v Benfica: reported 4-2 includes a shootout, but TM has no shootout events",exclude from score checks; regulation score from goal events
+2331179,score_vs_events,"FR1 2013-14 Lorient v Lille: reported 1-4, goal events 1-3",unresolved: cross-check with football-data.co.uk
+2353759,score_vs_events,"FR1 2013-14 Nantes v Bastia: reported 0-0, goal events 2-0",unresolved: cross-check with football-data.co.uk
+3432100,missing_goal_events,"PO1 2020-21 Moreirense v Rio Ave: reported 1-1, no goal events",exclude from stint plus-minus
+3432219,missing_goal_events,"PO1 2020-21 Tondela v Boavista: reported 3-1, no goal events",exclude from stint plus-minus
+3432146,missing_goal_events,"PO1 2020-21 Pacos de Ferreira v B SAD: reported 1-0, no goal events",exclude from stint plus-minus

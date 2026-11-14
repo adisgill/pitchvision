@@ -24,7 +24,7 @@ players, who appear only in SB).
   deterministically from the spine, and new entities are appended.
 - `core.crosswalk(entity, source, source_id, canonical_id, method, confidence, note)`.
   `method` ∈ {`spine`, `exact`, `deterministic`, `fuzzy`, `override`}.
-- `data/overrides/crosswalk_overrides.csv` (committed, hand-edited) **wins over everything**.
+- `overrides/crosswalk_overrides.csv` (committed, hand-edited) **wins over everything**.
   Each row has the form (entity, source, source_id → canonical_id or `distinct`). A
   `distinct` row forbids a merge the matcher would otherwise make.
 - `core.crosswalk_qa`: every unmatched source id, every ambiguous candidate set (top two
@@ -40,7 +40,7 @@ players, who appear only in SB).
    case, drop punctuation, then strip a stop-list of club tokens (fc, cf, afc, ac, sc, sv,
    ssc, as, ud, cd, rcd, vfl, vfb, tsg, 1., calcio, club, de, futbol…). The candidate set is
    the clubs that played in that league-season in TM, about 20 per league-season.
-2. **Alias table** (`data/overrides/club_aliases.csv`, committed) for the usual short
+2. **Alias table** (`overrides/club_aliases.csv`, committed) for the usual short
    forms: "Man United", "Nott'm Forest", "Ath Bilbao", "Ein Frankfurt", "Paris SG",
    "M'gladbach" and so on. FD uses these heavily.
 3. **Token-sort similarity** (rapidfuzz) ≥ 90 within the league-season candidates, only if

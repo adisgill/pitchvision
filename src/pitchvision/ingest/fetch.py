@@ -5,6 +5,7 @@ sha256). ``build`` never imports this module.
 
 from __future__ import annotations
 
+import gzip
 import hashlib
 import json
 import time
@@ -50,10 +51,15 @@ class Fetcher:
         return self.root / "manifest.jsonl"
 
     def get(self, url: str, rel: str, refresh: bool = False, retries: int = 3) -> Path:
+        """Download ``url`` to ``root/rel``. A ``rel`` ending in ``.gz`` for a URL that
+        doesn't is stored gzip-compressed (the bytes are otherwise untouched); the manifest
+        then also records the sha256 of the content as served."""
         dest = self.root / rel
         if dest.exists() and not refresh:
             return dest
         dest.parent.mkdir(parents=True, exist_ok=True)
+        compress = rel.endswith(".gz") and not url.split("?")[0].endswith(".gz")
+        content_hash = None
         for attempt in range(retries):
             wait = self.min_interval - (time.monotonic() - self._last)
             if wait > 0:
@@ -61,21 +67,25 @@ class Fetcher:
             self._last = time.monotonic()
             try:
                 tmp = dest.with_suffix(dest.suffix + ".part")
+                h = hashlib.sha256()
                 with self.client.stream("GET", url) as r:
                     r.raise_for_status()
-                    with tmp.open("wb") as f:
+                    opener = gzip.open if compress else open
+                    with opener(tmp, "wb") as f:
                         for chunk in r.iter_bytes(1 << 16):
+                            h.update(chunk)
                             f.write(chunk)
                 tmp.replace(dest)
+                content_hash = h.hexdigest() if compress else None
                 break
             except (httpx.HTTPError, OSError):
                 if attempt == retries - 1:
                     raise
                 time.sleep(5 * (attempt + 1))
-        self._record(url, rel, dest)
+        self._record(url, rel, dest, content_hash)
         return dest
 
-    def _record(self, url: str, rel: str, dest: Path) -> None:
+    def _record(self, url: str, rel: str, dest: Path, content_hash: str | None = None) -> None:
         row = {
             "source": self.source,
             "url": url,
@@ -84,6 +94,8 @@ class Fetcher:
             "bytes": dest.stat().st_size,
             "sha256": sha256(dest),
         }
+        if content_hash:
+            row["content_sha256"] = content_hash
         with self.manifest.open("a", encoding="utf-8", newline="\n") as f:
             f.write(json.dumps(row) + "\n")
 

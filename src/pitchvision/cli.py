@@ -30,6 +30,19 @@ def ingest(
 
 
 @app.command()
+def build(
+    strict: bool = typer.Option(True, "--strict/--no-strict", help="Fail on QA failures."),
+) -> None:
+    """Rebuild every table from the raw caches (never fetches)."""
+    import logging
+
+    from pitchvision import build as b
+
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s")
+    typer.echo(b.run(strict=strict))
+
+
+@app.command()
 def version() -> None:
     """Print the version."""
     from importlib.metadata import version as v
