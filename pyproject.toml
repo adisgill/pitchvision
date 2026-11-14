@@ -1,0 +1,56 @@
+[project]
+name = "pitchvision"
+version = "0.0.1"
+description = "Open-source soccer analytics: context-adjusted 0-100 ratings, calibrated forecasts and a public scorecard."
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+requires-python = ">=3.12,<3.13"
+authors = [{ name = "Adi Gill" }]
+keywords = ["soccer", "football", "analytics", "duckdb", "xg"]
+dependencies = [
+    "duckdb>=1.1",
+    "httpx>=0.27",
+    "numpy>=2.0",
+    "pandas>=2.2",
+    "pyarrow>=17",
+    "python-dotenv>=1.0",
+    "typer>=0.12",
+    # Windows has no IANA time-zone database; zoneinfo needs it for UTC conversion.
+    "tzdata>=2024.1",
+]
+
+[project.scripts]
+pitchvision = "pitchvision.cli:app"
+
+[dependency-groups]
+dev = [
+    "pytest>=8",
+    "ruff>=0.6",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/pitchvision"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+markers = [
+    "network: test hits a live external source (deselected by default)",
+    "integration: needs the built database; skipped otherwise",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.ruff.lint.flake8-bugbear]
+extend-immutable-calls = ["typer.Option", "typer.Argument"]
