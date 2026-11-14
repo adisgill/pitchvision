@@ -8,6 +8,7 @@ from dataclasses import dataclass
 
 import pandas as pd
 
+from pitchvision.config import OVERRIDES
 from pitchvision.db import has_table
 
 TIER1 = ("GB1", "ES1", "L1", "IT1", "FR1")
@@ -82,6 +83,40 @@ STINT_CHECKS = [
 ]  # fmt: skip
 
 
+_EVENT_GOALS = """
+    with g as (select match_id, team_id,
+                      count(*) filter (where type in ('shot', 'shot_freekick', 'shot_penalty')
+                                       and result = 'success') g,
+                      count(*) filter (where result = 'owngoal') og
+               from stg.{p}_actions group by all)
+    select m.competition_id || ' ' || m.season scope,
+           avg(((coalesce(h.g, 0) + coalesce(a.og, 0)) = m.home_goals
+                and (coalesce(a.g, 0) + coalesce(h.og, 0)) = m.away_goals)::int) value
+    from stg.{p}_matches m
+    left join g h on h.match_id = m.match_id and h.team_id = m.home_team_id
+    left join g a on a.match_id = m.match_id and a.team_id = m.away_team_id
+    where m.match_id not in (select match_id::bigint from read_csv('{issues}', header = true,
+                             all_varchar = true) where provider = '{provider}')
+    group by 1"""
+
+_IN_FRAME = """
+    select '{provider}' scope,
+           avg((start_x between 0 and 105 and start_y between 0 and 68
+                and coalesce(end_x, 0) between 0 and 105
+                and coalesce(end_y, 0) between 0 and 68)::int) value
+    from stg.{p}_actions where start_x is not null"""
+
+
+def event_checks(prefix: str, provider: str) -> list[Check]:
+    issues = (OVERRIDES / "event_known_issues.csv").as_posix()
+    return [
+        Check(f"{provider}: event goals = final score (share of matches)",
+              _EVENT_GOALS.format(p=prefix, provider=provider, issues=issues), 0.995),
+        Check(f"{provider}: action coordinates inside 105 x 68 (share)",
+              _IN_FRAME.format(p=prefix, provider=provider), 1.0),
+    ]  # fmt: skip
+
+
 def run(con, checks: list[Check] | None = None) -> pd.DataFrame:
     if checks is None:
         checks = []
@@ -89,6 +124,8 @@ def run(con, checks: list[Check] | None = None) -> pd.DataFrame:
             checks += TM_CHECKS
         if has_table(con, "metrics", "stints"):
             checks += STINT_CHECKS
+        if has_table(con, "stg", "wy_actions"):
+            checks += event_checks("wy", "wyscout")
     rows = []
     for c in checks:
         df = con.execute(c.sql).df()

@@ -29,6 +29,11 @@ def run(strict: bool = True) -> dict:
                 from pitchvision.metrics import stints
 
                 out["stints"] = stints.build(con, paths)
+        if (paths.source("wyscout") / "events" / "events.zip").exists():
+            with stage("stg: wyscout"):
+                from pitchvision.stg import wyscout
+
+                out["wyscout"] = wyscout.build(con, paths)
         with stage("qa: data-quality checks"):
             qa = quality.run(con)
             con.execute("create schema if not exists qa")

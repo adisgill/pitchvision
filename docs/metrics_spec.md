@@ -304,6 +304,18 @@ if the receiver's next action starts ≥ 3 m from where the ball arrived, record
 the arrival point to the next start. The start is the pass end location; there are no
 time limits, because WY has no durations.
 
+*Change, Nov 14 (Phase 1, Wyscout staging):* **this doesn't work, and it's dropped.** The
+public Wyscout files chain positions: each event's start equals the previous pass's end
+exactly. So there is no gap to infer a carry from. Over 3.1 M events the rule found 2,853
+"gaps", all after duels or stoppages (mean 32 m), which are artifacts, not carries.
+
+- Wyscout's own `Acceleration` events (≈ 27k) are the only carries, kept as `dribble`.
+- For the 2017-18 Wyscout season, progressive carries, carry xT and carry-based
+  final-third and box entries are **blank, not zero**. Progression there is built from
+  passes and accelerations only, and the rating notes it.
+- Goals scored direct from a corner carry the goal tag on the corner, so they are staged
+  as direct set-piece shots.
+
 ### 4.4 Possession value (headline)
 
 | Metric | Definition | Tier |

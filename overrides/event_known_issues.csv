@@ -1,0 +1,2 @@
+provider,match_id,issue,detail,resolution
+wyscout,2499781,missing_shot_event,"2017-18 (England): the 0-1 goal exists only as a goal tag on the keeper's save attempt; no shot event",exclude from event goal checks; shot-based metrics miss one goal
