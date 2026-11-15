@@ -29,8 +29,12 @@ from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import OneHotEncoder, OrdinalEncoder, SplineTransformer
 
 NUM = ["distance", "angle"]
-CAT = ["body", "situation", "assist", "state"]
+# provider corrects how each provider records shots (Wyscout seasons convert ~10% above a
+# provider-blind model); women is a real difference in conversion. Both cut the mean
+# per-season xG/goals error from 9.6% to 4.9% out of fold (Phase 1 test, Nov 14).
+CAT = ["body", "situation", "assist", "state", "provider", "women"]
 EPS = 1e-6
+THREADS = 4
 
 
 def _logit_model():
@@ -60,6 +64,7 @@ MODELS = {"logit": _logit_model, "gbm": _gbm_model}
 def _prep(s: pd.DataFrame) -> pd.DataFrame:
     s = s.copy()
     s["state"] = s.state.astype(str)
+    s["women"] = s.women.astype(str)
     s["under_pressure"] = s.under_pressure.fillna(False).astype(bool).astype(str)
     return s
 
@@ -80,23 +85,39 @@ def scores(y: np.ndarray, p: np.ndarray) -> dict:
             "cal_intercept": ci, "cal_slope": cs}  # fmt: skip
 
 
-def logo_predict(s: pd.DataFrame, make, features: list[str]) -> np.ndarray:
-    """Leave-one-group-out predictions."""
+def logo_predict(s: pd.DataFrame, make, features: list[str], label: str = "") -> np.ndarray:
+    """Leave-one-group-out predictions (one fit per held-out group, logged)."""
+    import logging
+    import time
+
+    log = logging.getLogger(__name__)
     out = np.full(len(s), np.nan)
-    for g in s.group.unique():
+    for k, g in enumerate(s.group.unique(), 1):
+        t0 = time.perf_counter()
         test = (s.group == g).to_numpy()
         m = make().fit(s.loc[~test, features], s.goal[~test])
         out[test] = m.predict_proba(s.loc[test, features])[:, 1]
+        log.info("xg %s fold %d (%s) %.1f s", label, k, g, time.perf_counter() - t0)
     return out
 
 
 def fit(shots: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, str]:
-    """Return (shots with xg and xg_oof, evaluation table, calibration bins, chosen model)."""
+    """Return (shots with xg and xg_oof, evaluation table, calibration bins, chosen model).
+
+    OpenMP is capped at ``THREADS``: with every core busy (other jobs on the machine), the
+    gradient-boosting threads spin-wait on each other and a 5-minute fit took over 48."""
+    from threadpoolctl import threadpool_limits
+
+    with threadpool_limits(limits=THREADS):
+        return _fit(shots)
+
+
+def _fit(shots: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, str]:
     s = _prep(shots)
     pen = s.situation == "penalty"
     np_s = s[~pen].reset_index(drop=True)
     feats = NUM + CAT
-    oof = {name: logo_predict(np_s, make, feats) for name, make in MODELS.items()}
+    oof = {name: logo_predict(np_s, make, feats, name) for name, make in MODELS.items()}
     oof["base_rate"] = np.full(len(np_s), np.nan)
     for g in np_s.group.unique():
         t = (np_s.group == g).to_numpy()
@@ -118,9 +139,9 @@ def fit(shots: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, 
                  **scores(y[sb], psb[sb.to_numpy()])})  # fmt: skip
     # StatsBomb-only: does the pressure flag help? (LOGO within StatsBomb seasons)
     sbs = np_s[sb].reset_index(drop=True)
-    base = logo_predict(sbs, MODELS["gbm"], feats)
+    base = logo_predict(sbs, MODELS["gbm"], feats, "gbm sb-only")
     press = logo_predict(sbs, lambda: _gbm_model(["under_pressure"]),
-                         feats + ["under_pressure"])  # fmt: skip
+                         feats + ["under_pressure"], "gbm+pressure sb-only")  # fmt: skip
     ysb = sbs.goal.to_numpy()
     rows.append({"model": "gbm, StatsBomb-only fit", "group": "statsbomb seasons",
                  **scores(ysb, base)})  # fmt: skip
@@ -144,6 +165,7 @@ def fit(shots: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, 
     out = pd.concat([np_s, pens], ignore_index=True).assign(xg_model=chosen)
     out["under_pressure"] = out.under_pressure == "True"
     out["state"] = out.state.astype(int)
+    out["women"] = out.women == "True"
     return out, ev, cal, chosen
 
 

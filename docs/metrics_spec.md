@@ -627,6 +627,42 @@ rating, never instead of it.
     xG on the research mirror (D5).
   - A recalibration check per league-season (calibration slope and intercept).
 - **Penalties:** fixed at the pooled conversion rate (about 0.76), shown separately.
+
+*Change, Nov 14 (Phase 1, xG built):* results and the changes they forced.
+`metrics.xg_eval` holds every number below; out of fold means leave-one-season-out over
+18 provider-league-seasons.
+
+- **Training data.** 116,003 non-penalty shots (SB 73,501; WY 42,502) plus 1,305
+  penalties (conversion 0.749).
+- **Feature derivation.** Situation and assist type come from the action sequence the same
+  way for both providers, ignoring carries (spec 4.3).
+- **The models, out of fold:**
+
+  | Model | Log loss | Brier | AUC | xG vs goals |
+  |---|---|---|---|---|
+  | Base rate | 0.3284 | 0.0912 | – | – |
+  | Spline logistic | 0.2753 | 0.0786 | 0.782 | 11,769 vs 11,773 |
+  | **Monotone GBM (chosen)** | **0.2736** | **0.0782** | **0.787** | 11,780 vs 11,773 |
+
+  The GBM's calibration slope is 0.98.
+- **Against StatsBomb's own xG** on the StatsBomb seasons: ours scores 0.2709 log loss and
+  0.788 AUC; `statsbomb_xg` scores 0.2607 and 0.808. **We trail it**, as expected:
+  StatsBomb's model uses freeze frames (goalkeeper and defender positions), which rule 2
+  keeps out of production. The gap is reported, not hidden.
+- **Two features added** to the spec's list:
+  - `provider`: Wyscout seasons converted about 10% above a provider-blind model, a
+    measurement difference in how shots are recorded;
+  - `women`: a real difference in conversion.
+
+  Together they cut the mean per-season |xG/goals − 1| from 9.6% to 4.9%, and log loss from
+  0.2748 to 0.2736.
+- **Remaining per-season miss:** −12% (Liga F 2023-24) to +20% (NWSL 2023). Recalibration
+  per league-season is a Phase 2 item.
+- **The pressure flag is worth almost nothing.** On a StatsBomb-only fit, log loss goes
+  from 0.2709 to 0.2707, so the SB-only variant isn't used.
+- **Threads.** Fits run with OpenMP capped at 4 threads (`threadpoolctl`, already
+  installed as a scikit-learn dependency). With all cores busy, uncapped threads
+  spin-waited and a 10-minute fit didn't finish in 48 minutes.
 - **PSxG:** SB only. Features: end location (y, z) in the goal mouth, distance, angle, body
   part, plus pre-shot xG.
 
