@@ -635,6 +635,66 @@ rating, never instead of it.
   level along the curve, with an 80% band.
 - **Dates of birth:** missing for 49 players, who are excluded.
 
+*Change, Nov 15 (Phase 1, league strength and age curves built):*
+
+**League strength** (`ratings/league.py`)
+
+- **European results.** Per-season offsets in goals per match against the Premier League,
+  with 80% bootstrap bands (typically ±0.35 a season). Means for 2012-2025:
+
+  | League | Offset |
+  |---|---|
+  | La Liga | −0.04 |
+  | Bundesliga | −0.16 |
+  | Serie A | −0.29 |
+  | Ligue 1 | −0.49 |
+  | Primeira | −0.98 |
+  | Eredivisie | −1.30 |
+
+- **Translation factors** (attacking movers, age-adjusted log non-penalty goals per 90, 990
+  movers): moving into a league multiplies scoring by
+
+  | League | Multiplier (80% band) |
+  |---|---|
+  | Serie A | 1.17 (1.09-1.26) |
+  | La Liga | 1.22 |
+  | Bundesliga | 1.27 |
+  | Ligue 1 | 1.38 |
+  | Primeira | 1.77 |
+  | Eredivisie | 1.93 (1.80-2.12) |
+
+- **The two methods agree on the order** (r 0.96).
+- **UEFA-style coefficient.** Points per club with no bonus points, a labelled
+  approximation. It ranks 2024-25 as England, Italy, Spain, Germany, Portugal,
+  Netherlands, France. France sits lower than in UEFA's official table, where bonus points
+  matter for associations with few clubs.
+- The adjusted rating of 5.6 (`rating_adj`) waits for the app phase. The factors are in
+  `ratings.league_translation`.
+
+**Age curves** (`ratings/aging.py`) use **fixed effects, not the delta method.**
+
+- The delta method put every peak at 17-21. A player is a regular in season one partly
+  because it went well, so the average change was negative at every age, and two
+  survivor-correction attempts (league leavers as dropouts, then minutes weights) didn't
+  fix it.
+- The minutes-weighted regression has player and league-season fixed effects.
+- **Dropouts** (seen in none of the mirror's 70 competitions the next season) get one
+  imputed season at the 20th percentile; the 10th and 30th change the peaks by ≤ 1 year in
+  almost all groups.
+- A unit test checks the method recovers a known peak under the selection that broke the
+  delta method.
+
+| Metric | Peak (80% band) |
+|---|---|
+| Impact | CB 27 (26-27), DM 27 (25-27), ST 27 (25-28), FB 26, W 25, AM 24, CM 24, GK 29 (25-29) |
+| Minutes share | 23-24 outfield, GK 26 |
+| Non-penalty goals per 90 | ST 27 (18-27), W 24, FB 24, CM 24 |
+
+- For goals per 90, **AM and DM aren't identified** (bands 17-29) and aren't used for
+  projections.
+- Projections for the latest season's players, 1-3 years ahead with 80% bands, are in
+  `ratings.age_projection`.
+
 ### 5.8 Team ratings (show all three and where they disagree)
 
 1. **Opponent-adjusted attack/defence:** Dixon-Coles on goals, and on xG (D14), blended
@@ -950,6 +1010,25 @@ Against the real team xG available for 2026-27, it correlates 0.43-0.75 per team
 - Model: GBM, cross-validated by player.
 - Output: model value with a 80% interval (quantile GBM), and over/under-valued players.
 - **Labelled:** the model learns Transfermarkt's own valuation; it doesn't price fees.
+
+*Change, Nov 15 (Phase 1, market value built):* `ratings/market.py`.
+
+- **Features differ from the list above.** Contract length and caps are left out: the
+  mirror has them only as a 2026 snapshot, so they'd leak the future into earlier seasons.
+  The previous valuation is left out by design. Club strength (Dixon-Coles) is added.
+- **Every value is out of fold**, grouped by player.
+- **Results** (40,019 player-seasons):
+  - R² on log value 0.88;
+  - median absolute error 30%;
+  - the raw 10th-90th band held 75% and was widened by conformalised quantile regression
+    to 80% (79-81% in every season). The overall figure is calibrated by construction; the
+    per-season figures are the check.
+- **The model compresses the top end.** The largest "market above model" gaps are stars and
+  goalkeepers: Kane 60M vs 12M model, Álvarez 100M vs 28M, Oblak. It has no reputation,
+  international or event-data features, and a strong age effect.
+- The largest "model above market" gaps are mostly older Eredivisie players and back-up
+  goalkeepers.
+- **Read gaps as the market's premium over a player's league numbers, not as mispricing.**
 
 ---
 

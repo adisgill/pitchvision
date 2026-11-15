@@ -296,6 +296,25 @@ RAPM_CHECKS = [
 ]  # fmt: skip
 
 
+CAREER_CHECKS = [
+    Check("age curves: Impact peaks between 23 and 30 for every group (worst distance)", """
+        select 'rapm' scope, max(greatest(23 - peak_age, peak_age - 30, 0)) value
+        from ratings.age_curves where kind = 'summary' and metric = 'rapm'
+          and dropout_pct = 0.2""", 0, higher_is_better=False),
+    Check("league strength: European offsets and translation factors agree in order (r)", """
+        with e as (select league, avg(offset_gd) e from ratings.league_strength_europe
+                   group by 1),
+        t as (select league, -log_factor t from ratings.league_translation)
+        select 'all' scope, corr(e, t) value from e join t using (league)""", 0.5),
+    Check("market value: out-of-fold R^2 on log value", """
+        select 'all' scope, r2_log value from ratings.market_value_eval
+        where scope = 'all'""", 0.7),
+    Check("market value: 80% range coverage out of fold (distance from 0.80)", """
+        select 'all' scope, abs(inside_80 - 0.8) value from ratings.market_value_eval
+        where scope = 'all'""", 0.03, higher_is_better=False),
+]  # fmt: skip
+
+
 def event_checks(prefix: str, provider: str) -> list[Check]:
     issues = (OVERRIDES / "event_known_issues.csv").as_posix()
     return [
@@ -335,6 +354,8 @@ def run(con, checks: list[Check] | None = None) -> pd.DataFrame:
             checks += TEAM_CHECKS
         if has_table(con, "forecast", "season_backtest_eval"):
             checks += SIM_CHECKS
+        if has_table(con, "ratings", "market_value_eval"):
+            checks += CAREER_CHECKS
     rows = []
     for c in checks:
         df = con.execute(c.sql).df()

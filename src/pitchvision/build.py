@@ -85,6 +85,12 @@ def run(strict: bool = True) -> dict:
                 from pitchvision.forecast import season
 
                 out["season_sim"] = season.build(con, paths)
+            with stage("ratings: age curves, league strength, market value"):
+                from pitchvision.ratings import aging, league, market
+
+                out["aging"] = aging.build(con, paths)
+                out["league"] = league.build(con, paths)
+                out["market"] = market.build(con, paths)
         if has_table(con, "metrics", "shots"):
             with stage("models: expected threat"):
                 from pitchvision.models import xt
