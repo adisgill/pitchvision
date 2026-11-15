@@ -210,6 +210,21 @@ TABLES: dict[str, str] = {
         from stg.tm_valuations v
         where v.value_date >= '2010-01-01'
           and v.player_id in (select player_id from ratings.player_season_c)""",
+    "fm_player_season": "select * exclude (player_fm_id, name) from metrics.fm_player_season",
+    "fm_players": """select distinct on (f.player_id) f.player_id, m.name, m.age, m.country
+                     from metrics.fm_player_season f join stg.fm_player_match m
+                       on m.player_fm_id = f.player_fm_id where f.player_id like 'fm-%'""",
+    "fm_zones_team": "select * from metrics.fm_zones_team",
+    "fm_zones_player": "select * from metrics.fm_zones_player",
+    "fm_team_match": "select * from metrics.fm_team_match",
+    "fixtures": """select * exclude (home_name, away_name), home_name, away_name
+                   from metrics.fm_fixtures""",
+    "fm_events": """select x.match_id, e.type, e.minute, e.minute_added, e.is_home,
+                           coalesce(p.player_id, 'fm-' || e.player_fm_id) player_id,
+                           e.player_name, e.card, e.own_goal, e.penalty, e.sub_in, e.sub_out
+                    from stg.fm_events e join core.fm_matches_xw x using (fm_match_id)
+                    left join (select distinct player_fm_id, player_id from core.fm_players) p
+                      on p.player_fm_id = e.player_fm_id::bigint""",
     "matchup_factors": "select * from research.matchup_factors",
     "matchup_factor_bins": "select * from research.matchup_factor_bins",
     "timelines": """
@@ -266,6 +281,9 @@ def build(publish_dir: Path = OUT) -> dict:
                    f"p.lh_g_{hl}))) lh, exp({w} * ln(p.la_g_{hl}) + {1 - w} * "
                    f"ln(coalesce(p.la_x_{hl}, p.la_g_{hl}))) la, p.rho_{hl} rho")  # fmt: skip
         for name, sql in TABLES.items():
+            fm = name.startswith("fm_") or name == "fixtures"
+            if fm and not has_table(con, "metrics", "fm_player_season"):
+                continue
             sql = (sql.replace("{XW_PLAYER}", XW_PLAYER).replace("{XW_CLUB}", XW_CLUB)
                    .replace("{LAMBDAS}", lambdas))  # fmt: skip
             tmp = publish_dir / f"{name}.parquet"

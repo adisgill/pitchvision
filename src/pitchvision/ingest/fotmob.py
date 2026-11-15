@@ -55,12 +55,12 @@ def fotmob(root: Path, sample: bool = True, current: int | None = None,
     comps = leagues or (["GB1"] if sample else list(LEAGUES))
     got: list[Path] = []
     with Fetcher("fotmob", root, min_interval=MIN_INTERVAL) as f:
-        for comp in comps:
-            for start in range(cur, FIRST_SEASON - 1, -1):  # newest first
-                season = season_param(comp, start)
-                if sample and start != cur:
-                    continue
-                q = season.replace("/", "%2F")
+        # season-major: every league's current season first (recency matters most)
+        for start in range(cur, FIRST_SEASON - 1, -1):
+            if sample and start != cur:
+                continue
+            for comp in comps:
+                q = season_param(comp, start).replace("/", "%2F")
                 url = f"{BASE}/leagues/{LEAGUES[comp]}/overview/x?season={q}"
                 p = f.get(url, f"leagues/{comp}/{start}.html.gz", refresh=start == cur)
                 got.append(p)

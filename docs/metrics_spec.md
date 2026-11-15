@@ -1496,3 +1496,40 @@ metric impacts almost no one sees"):* two new outputs and a daily operating mode
   same bytes, the same content-hashed name and the same version.
 - The football-data season is now derived from the date (it turns over on 1 July) rather
   than hard-coded.
+
+### 12.4 Current-season data from FotMob
+
+*Change, Nov 15 (asked for: "we need data for recency heavily"):* the user approved
+scraping WhoScored, FotMob and SofaScore.
+
+- **What we can use:**
+  - **FotMob:** we use its public league and match pages. robots.txt allows the HTML pages
+    and disallows `/api/*`, which we never call. Requests go every 3 s under an honest user
+    agent.
+  - **WhoScored** answers a plain request with a CAPTCHA challenge, and **SofaScore**
+    blocks automated clients even on robots.txt. Getting past either would mean defeating
+    bot protection, which we don't do. Neither is used.
+- **Coverage:** all nine leagues, 2024-25 onward, fetched newest season first. League
+  pages carry each season's full schedule, including upcoming matches. Match pages carry:
+  - shots with x/y, xG and xGOT;
+  - line-ups with layout positions;
+  - about 60 per-player stats (Opta-based, including distance, sprints and top speed);
+  - about 46 team stats;
+  - a goal, card and substitution timeline;
+  - the stadium with coordinates.
+- **Linking** (`core/fm_crosswalk.py`):
+  - Clubs: one-to-one optimal assignment on normalised names per league-season. The first
+    two leagues linked all 40 clubs at score 100.
+  - Matches: same league and clubs within 2 days. Every finished match linked.
+  - Players: same club, name and birth year, then any recent Transfermarkt player with
+    the same name and birth year, if unique. That covers summer 2026 transfers after the
+    freeze. 89% linked; the rest keep `fm-<id>`.
+- **Metrics** (`metrics/fotmob.py`):
+  - **Player-seasons:** per-90 measures and seven dimension ratings on the house scale
+    (shooting, creation, progression, security, defending, duels, physical, plus
+    goalkeeping), shrunk at k = 450 minutes. Position groups come from the line-up layout.
+  - **Shot zone maps:** 12 x 8, for and against, team and player.
+  - **Team match stats**, keyed to our match ids.
+  - **The schedule**, with our club ids.
+- **Licence:** we publish only aggregates: player-season and team-match stats, zone sums
+  and the fixture list. Raw pages, per-shot rows and per-event coordinates stay local.

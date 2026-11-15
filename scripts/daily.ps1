@@ -17,6 +17,7 @@ function Step($name, [scriptblock]$cmd) {
 }
 
 Step "fetch football-data.co.uk (current season only)" { uv run pitchvision ingest footballdata --fetch }
+Step "fetch FotMob (fixtures and newly finished matches)" { uv run pitchvision ingest fotmob --fetch --full }
 Step "build (daily stages)" { uv run pitchvision build --daily }
 Step "export and publish" { uv run pitchvision demo --publish }
 "[$(Get-Date -Format s)] done" | Out-File -Append -Encoding utf8 $log
