@@ -69,6 +69,10 @@ def run(strict: bool = True) -> dict:
                 from pitchvision.models import xt
 
                 out["xt"] = xt.build(con, paths)
+            with stage("models: VAEP action values (out of fold)"):
+                from pitchvision.models import vaep
+
+                out["vaep"] = vaep.build(con, paths)
             with stage("metrics: tier-A minutes and player-seasons"):
                 from pitchvision.metrics import minutes_a, players_a
 

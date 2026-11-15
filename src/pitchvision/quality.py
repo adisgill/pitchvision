@@ -209,6 +209,22 @@ XT_CHECKS = [
 ]  # fmt: skip
 
 
+VAEP_CHECKS = [
+    Check("vaep: out-of-fold log-loss gain over the base rate, per label", """
+        select label scope, logloss_base - logloss value from metrics.vaep_eval
+        where "group" = 'all'""", 0.0),
+    Check("vaep: probabilities in [0, 1] and values finite (share of actions)", """
+        select 'all' scope,
+               avg((p_score between 0 and 1 and p_concede between 0 and 1
+                    and isfinite(vaep))::int) value
+        from metrics.vaep_actions""", 1.0),
+    Check("vaep: predicted vs actual scoring labels per season, worst relative error (info)", """
+        select 'all' scope, max(abs(pred_sum / positives - 1)) value from metrics.vaep_eval
+        where label = 'scores' and "group" <> 'all'""", 0.10, higher_is_better=False,
+          blocking=False),
+]  # fmt: skip
+
+
 def event_checks(prefix: str, provider: str) -> list[Check]:
     issues = (OVERRIDES / "event_known_issues.csv").as_posix()
     return [
@@ -240,6 +256,8 @@ def run(con, checks: list[Check] | None = None) -> pd.DataFrame:
             checks += XG_CHECKS
         if has_table(con, "metrics", "xt_fit") and has_table(con, "metrics", "player_minutes_a"):
             checks += XT_CHECKS
+        if has_table(con, "metrics", "vaep_eval"):
+            checks += VAEP_CHECKS
     rows = []
     for c in checks:
         df = con.execute(c.sql).df()

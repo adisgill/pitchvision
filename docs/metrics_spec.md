@@ -719,6 +719,76 @@ rating, never instead of it.
   changes as in the VAEP paper.
 - Validated by AUC, calibration, and the split-half reliability of player VAEP /90.
 
+*Change, Nov 14-15 (Phase 1, VAEP built):*
+
+**Data and fitting**
+
+- 9,502,908 ball actions with own implementation of the features (`models/vaep.py`).
+- Labels use a 10-action window within a period; own goals count for the other team.
+- Two `HistGradientBoostingClassifier` models, fitted in 5 folds that hold out whole
+  provider-league-seasons (18 groups). Every action's probability is **out of fold**, and
+  those are the production values.
+  - The spec said leave-one-season-out. Five grouped folds cut the fits from 36 to 10, at
+    about 5 minutes each, and every action is still valued by a model that never saw its
+    season.
+- Fits run with OpenMP capped at 4 threads, as for xG.
+
+**Results**
+
+| Label | AUC | Log loss | Base rate | Predicted vs actual |
+|---|---|---|---|---|
+| Scores within 10 actions | 0.838 | 0.0443 | 0.0583 | 99,868 vs 99,726 |
+| Concedes within 10 actions | 0.854 | 0.0181 | 0.0225 | 31,950 vs 31,940 |
+
+- Per-season calibration of the scoring label is within ±12% (worst NWSL 2023, +12%),
+  reported by a non-blocking QA check.
+
+**Mean value per action**
+
+| Action | VAEP |
+|---|---|
+| Completed pass | +0.0035 |
+| Failed pass | −0.0061 |
+| Recovery | +0.010 |
+| Successful take-on | +0.012 |
+| Completed cross | +0.070 |
+| Missed shot | −0.058 |
+| Foul | −0.014 |
+
+**Two properties to keep in view**
+
+1. **Goal kicks earn defensive value** (≈ +0.014) because the danger left from the
+   opponent's missed shot ends there. This is standard in VAEP.
+   - It inflates goal-kick takers' defensive VAEP, so goalkeepers' VAEP is reported apart
+     from outfield players' (`vaep_keeper_p90`, and goal kicks in the passing family).
+2. **A shot's value includes whether it went in**, so raw offensive VAEP contains finishing
+   luck.
+   - Example: Bale tops La Liga 2015-16 at 0.95 per 90, 0.60 of it from shots.
+   - The rating uses a shot-value-replaced-by-xG variant (VAEP with each shot's outcome
+     swapped for its xG), to be built in Phase 2 alongside the Finishing dimension.
+
+**Reliability** (split-half, odd vs even matches, ≥ 450 minutes per half; quartiles of
+minutes per half)
+
+| VAEP per 90 | r by quartile |
+|---|---|
+| Total | 0.19, 0.37, 0.34, 0.48 |
+| Offensive | 0.17, 0.35, 0.31, 0.50 |
+| Defensive | 0.43, 0.49, 0.59, 0.78 |
+
+- **Defensive r is inflated by position.** Goalkeepers (the goal-kick effect) and
+  defenders versus forwards differ systematically, so Phase 2 re-estimates it within
+  position group before any weight is set.
+
+**Known-answer check**
+
+The top VAEP per 90 (≥ 900 minutes) is:
+
+- Payet, Mahrez and De Bruyne in the PL 2015-16;
+- Bale, Messi and James Rodríguez in La Liga 2015-16;
+- Coutinho, Martial, De Bruyne and Salah in the PL 2017-18;
+- Lauren James, Khadija Shaw and Höbinger in the WSL 2023-24.
+
 ### 6.4 xPass
 
 - Logistic regression or GBM on start location, end location, length, angle, pass height
