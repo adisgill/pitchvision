@@ -1365,3 +1365,59 @@ Phase 2 deliverable: `docs/validation.md` plus an app page.
 - Wages: a user override CSV only, labelled.
 - Weather: optional research, after Open-Meteo is approved as a source.
 - Set-piece routine clustering and pressing-trap detection: v1.x waves, tier A only.
+
+---
+
+## 11. Phase 1 additions, Nov 15 (win probability, team style, referees)
+
+*Change, Nov 15:* built ahead of the app, all in the build and its QA.
+
+**Win probability by game state** (`forecast/winprob.py`, spec 6.6). Fitted on the minutes
+of 2017-18 → 2020-21 (domestic leagues plus the Championship); checked on 2021-22 onward.
+
+- **Accuracy by match phase:**
+
+  | Minutes | Log loss, in play | Log loss, pre-match only |
+  |---|---|---|
+  | 0-14 | 0.96 | 0.98 |
+  | 75-89 | 0.48 | 0.98 |
+
+  The mean home-win probability is within 0.006 of the actual rate in every 15-minute bucket.
+- **Rate multipliers:**
+  - leading by one: 0.93;
+  - final 15 minutes: 1.35;
+  - **red cards:** a side down to ten scores at 0.58× its rate and the opponent at 1.69×.
+- **H11 (red-card effect by minute):** a red card costs the side 0.94 expected points at
+  kick-off, 0.78 at 30 minutes, 0.54 at 60 and 0.26 at 80 (level score, average rates).
+- **Timelines** for 30k matches (1.94 M minutes) are in `forecast.wp_timelines`.
+
+**Team style, deserved results and the xPoints table** (`metrics/teams.py`, spec 4.9-4.10)
+
+- Style metrics for every team-season on the event seasons.
+- Deserved P(W/D/L) from shots for 4,745 event-season matches.
+- The **xPoints table for every league-season**: real team xG for 2026-27, the shots proxy
+  before.
+- **Leicester 2015-16 finished 26 points above its xPoints**, the largest gap in that
+  season.
+- Two league-seasons miss the 3% xPoints-vs-points check (non-blocking): the proxy's
+  calibration varies by season.
+
+**Referees** (`metrics/referees.py`, spec 4.11). Reliability, in matches to r = 0.5:
+
+| Tendency | k (matches) | Reading |
+|---|---|---|
+| Yellow cards | 5 | a real tendency |
+| Fouls | 2.4 | a real tendency |
+| Red cards | 36 | weak |
+| Penalties (scored) | 225 | essentially noise |
+| Home bias (yellows) | 130 | essentially noise at any realistic sample |
+
+- Every rate is shrunk to its league-season mean with these `k`. **H8 (referee home bias)
+  is a null result**: a bias exists on average, but it can't be told apart referee by
+  referee.
+
+**Parked for after the app launch** (the user's priority, Nov 15):
+
+- xPass and post-shot xG (6.4, 6.1);
+- the player-projection backtest (7.3);
+- xG-based plus-minus (5.5).

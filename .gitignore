@@ -32,3 +32,6 @@ node_modules/
 .idea/
 .DS_Store
 Thumbs.db
+
+# personal notes for the owner of this checkout
+docs/your_todo.md

@@ -243,7 +243,8 @@ def build(con, paths: Paths) -> dict:
                  time.perf_counter() - t0)  # fmt: skip
     pred = pd.concat(preds, ignore_index=True)
     ev, chosen, grid = evaluate(pred)
-    keep = [c for c in pred.columns if c.endswith(("_h", "_d", "_a")) or c in (
+    keep = [c for c in pred.columns if c.endswith(("_h", "_d", "_a"))
+            or c.startswith(("lh_", "la_", "rho_")) or c in (
         "match_id", "competition_id", "season", "match_date", "home_club", "away_club",
         "home_goals", "away_goals", "outcome", "elo_home", "elo_away")]  # fmt: skip
     n = {}

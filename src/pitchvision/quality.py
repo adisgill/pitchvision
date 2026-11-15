@@ -348,6 +348,21 @@ TIER_A_CHECKS = [
 ]  # fmt: skip
 
 
+MATCH_CHECKS = [
+    Check("win probability: in-play beats pre-match log loss in every 15-minute bucket", """
+        select minutes scope, logloss_prematch - logloss_state value from forecast.wp_eval""",
+          0.0),
+    Check("win probability: mean home-win probability vs actual rate, worst bucket gap", """
+        select 'all' scope, max(abs(mean_p_home - home_win_rate)) value
+        from forecast.wp_eval""", 0.02, higher_is_better=False),
+    Check("xPoints table: league-season xPoints total within 3% of points", """
+        select competition_id || ' ' || season scope,
+               abs(sum(xpoints) / sum(points) - 1) value
+        from metrics.xpoints_table group by 1""", 0.03, higher_is_better=False,
+          blocking=False),
+]  # fmt: skip
+
+
 def event_checks(prefix: str, provider: str) -> list[Check]:
     issues = (OVERRIDES / "event_known_issues.csv").as_posix()
     return [
@@ -387,6 +402,8 @@ def run(con, checks: list[Check] | None = None) -> pd.DataFrame:
             checks += TEAM_CHECKS
         if has_table(con, "forecast", "season_backtest_eval"):
             checks += SIM_CHECKS
+        if has_table(con, "forecast", "wp_eval") and has_table(con, "metrics", "xpoints_table"):
+            checks += MATCH_CHECKS
         if has_table(con, "ratings", "market_value_eval"):
             checks += CAREER_CHECKS
         if has_table(con, "ratings", "player_season_a") and has_table(con, "ratings", "roles"):

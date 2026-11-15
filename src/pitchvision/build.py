@@ -85,6 +85,14 @@ def run(strict: bool = True) -> dict:
                 from pitchvision.forecast import season
 
                 out["season_sim"] = season.build(con, paths)
+            with stage("forecast: win probability by game state"):
+                from pitchvision.forecast import winprob
+
+                out["winprob"] = winprob.build(con, paths)
+            with stage("metrics: referees"):
+                from pitchvision.metrics import referees
+
+                out["referees"] = referees.build(con, paths)
             with stage("ratings: age curves, league strength, market value"):
                 from pitchvision.ratings import aging, league, market
 
@@ -109,6 +117,10 @@ def run(strict: bool = True) -> dict:
                 from pitchvision.ratings import players_a as ratings_a
 
                 out["ratings_a"] = ratings_a.build(con, paths)
+            with stage("metrics: team style, deserved results, xPoints"):
+                from pitchvision.metrics import teams
+
+                out["teams"] = teams.build(con, paths)
             with stage("ratings: roles and similar players"):
                 from pitchvision.ratings import roles
 
