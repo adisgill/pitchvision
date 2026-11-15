@@ -178,6 +178,7 @@ def build(con, paths: Paths) -> dict[str, int]:
         "tm_transfers",
         f"""
         select player_id, transfer_date, transfer_season, from_club_id, to_club_id,
+               from_club_name, to_club_name,
                transfer_fee as fee_eur, market_value_in_eur as value_eur
         from {_raw(paths, "transfers")}""",
     )

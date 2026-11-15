@@ -16,11 +16,16 @@ class QualityError(RuntimeError):
     pass
 
 
-def run(strict: bool = True) -> dict:
+def run(strict: bool = True, daily: bool = False) -> dict:
+    """Rebuild everything, or with ``daily`` only what new results change: football-data
+    staging, the crosswalk, team matches, forecasts, team ratings, the simulator, win
+    probability, referees and xPoints. Transfermarkt (frozen) and the event-data models
+    (static seasons) keep their last full build."""
     paths = get_paths()
+    full = not daily
     out: dict = {}
     with connect(paths) as con:
-        if (paths.source("transfermarkt") / "games.csv.gz").exists():
+        if full and (paths.source("transfermarkt") / "games.csv.gz").exists():
             with stage("stg: transfermarkt"):
                 from pitchvision.stg import transfermarkt
 
@@ -37,12 +42,12 @@ def run(strict: bool = True) -> dict:
                 from pitchvision.ratings import rapm
 
                 out["rapm"] = rapm.build(con, paths)
-        if (paths.source("wyscout") / "events" / "events.zip").exists():
+        if full and (paths.source("wyscout") / "events" / "events.zip").exists():
             with stage("stg: wyscout"):
                 from pitchvision.stg import wyscout
 
                 out["wyscout"] = wyscout.build(con, paths)
-        if any(paths.source("statsbomb").glob("*/matches")):
+        if full and any(paths.source("statsbomb").glob("*/matches")):
             with stage("stg: statsbomb"):
                 from pitchvision.stg import statsbomb
 
@@ -53,7 +58,7 @@ def run(strict: bool = True) -> dict:
             if parts:
                 con.execute("create or replace view stg.actions as "
                             + " union all by name ".join(parts))  # fmt: skip
-        if has_table(con, "stg", "actions"):
+        if full and has_table(con, "stg", "actions"):
             with stage("models: xG (fit leave-one-season-out, then all shots)"):
                 from pitchvision.models import xg
 
@@ -93,13 +98,14 @@ def run(strict: bool = True) -> dict:
                 from pitchvision.metrics import referees
 
                 out["referees"] = referees.build(con, paths)
-            with stage("ratings: age curves, league strength, market value"):
-                from pitchvision.ratings import aging, league, market
+            if full:
+                with stage("ratings: age curves, league strength, market value"):
+                    from pitchvision.ratings import aging, league, market
 
-                out["aging"] = aging.build(con, paths)
-                out["league"] = league.build(con, paths)
-                out["market"] = market.build(con, paths)
-        if has_table(con, "metrics", "shots"):
+                    out["aging"] = aging.build(con, paths)
+                    out["league"] = league.build(con, paths)
+                    out["market"] = market.build(con, paths)
+        if full and has_table(con, "metrics", "shots"):
             with stage("models: expected threat"):
                 from pitchvision.models import xt
 
@@ -125,6 +131,24 @@ def run(strict: bool = True) -> dict:
                 from pitchvision.ratings import roles
 
                 out["roles"] = roles.build(con, paths)
+            with stage("metrics: pitch value maps (team and player zones)"):
+                from pitchvision.metrics import zones
+
+                out["zones"] = zones.build(con, paths)
+        if (
+            full
+            and has_table(con, "forecast", "wf_predictions")
+            and has_table(con, "stg", "tm_lineups")
+        ):
+            with stage("research: hidden matchup factors"):
+                from pitchvision.research import matchup_factors
+
+                out["matchup_factors"] = matchup_factors.build(con, paths)
+        if daily and has_table(con, "metrics", "shots"):
+            with stage("metrics: team style, deserved results, xPoints"):
+                from pitchvision.metrics import teams
+
+                out["teams"] = teams.build(con, paths)
         with stage("qa: data-quality checks"):
             qa = quality.run(con)
             con.execute("create schema if not exists qa")

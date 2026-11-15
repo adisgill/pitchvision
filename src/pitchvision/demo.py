@@ -39,7 +39,8 @@ TABLES: dict[str, str] = {
                     select away_club, arg_max(away_team, match_date),
                            arg_max(competition_id, match_date)
                     from core.team_matches group by 1),
-        tm as (select 'tm-' || club_id club_id, name, domestic_competition_id league
+        tm as (select 'tm-' || club_id club_id, name, domestic_competition_id league,
+                      stadium_name, stadium_seats
                from stg.tm_clubs),
         ev as (select 'st-' || home_team_id club_id, any_value(home_team_name) name,
                       any_value(competition_id) league
@@ -48,25 +49,28 @@ TABLES: dict[str, str] = {
                select 'st-' || away_team_id, any_value(away_team_name), any_value(competition_id)
                from stg.sb_matches group by 1)
         select club_id, coalesce(any_value(fd.name), any_value(tm.name), any_value(ev.name))
-                   name, coalesce(any_value(fd.league), any_value(tm.league)) league
+                   name, coalesce(any_value(fd.league), any_value(tm.league)) league,
+               any_value(tm.stadium_name) stadium, any_value(tm.stadium_seats) capacity
         from (select club_id from fd union select club_id from tm union
               select club_id from ev) ids
         left join fd using (club_id) left join tm using (club_id) left join ev using (club_id)
         group by club_id""",
     "players": """
         select 'tm-' || player_id player_id, name, date_of_birth, country_of_citizenship
-               nationality, position, foot, height_in_cm
+               nationality, position, foot, height_in_cm, sub_position,
+               contract_expiration_date, international_caps,
+               'tm-' || current_club_id current_club_id, market_value_in_eur, last_season
         from stg.tm_players
         union all
         select distinct on (x.canonical_id) x.canonical_id, l.player_name, null, l.country,
-               null, null, null
+               null, null, null, null, null, null, null, null, null
         from core.crosswalk x join stg.sb_lineups l
           on x.source = 'statsbomb' and x.source_id = l.player_id::varchar
         where x.entity = 'player' and x.canonical_id not like 'tm-%'
         union all
         select distinct on (x.canonical_id) x.canonical_id,
                p.first_name || ' ' || p.last_name, p.birth_date, p.citizenship, p.role, p.foot,
-               p.height_cm
+               p.height_cm, null, null, null, null, null, null
         from core.crosswalk x join stg.wy_players p
           on x.source = 'wyscout' and x.source_id = p.player_id::varchar
         where x.entity = 'player' and x.canonical_id not like 'tm-%'""",
@@ -145,10 +149,69 @@ TABLES: dict[str, str] = {
         select t.match_id, t.competition_id, t.season, t.season_label, t.match_date,
                t.kickoff_utc, t.home_club, t.away_club, t.home_team, t.away_team, t.played,
                t.home_goals, t.away_goals, t.home_goals_official, t.away_goals_official,
-               t.home_shots, t.away_shots, t.home_sot, t.away_sot, t.home_xg, t.away_xg,
+               f.home_goals_ht, f.away_goals_ht,
+               t.home_shots, t.away_shots, t.home_sot, t.away_sot, t.home_corners,
+               t.away_corners, f.home_fouls, f.away_fouls, f.home_yellows, f.away_yellows,
+               t.home_reds, t.away_reds, t.home_xg, t.away_xg,
                t.proxy_home_xg, t.proxy_away_xg, t.close_home, t.close_draw, t.close_away,
-               t.close_source, t.referee, p.elo_h, p.elo_d, p.elo_a, p.mkt_h, p.mkt_d, p.mkt_a
-        from core.team_matches t left join forecast.wf_predictions p using (match_id)""",
+               t.close_source, coalesce(t.referee, g.referee) referee,
+               g.home_manager, g.away_manager, g.home_formation, g.away_formation,
+               g.attendance, g.stadium, g.round,
+               p.elo_home, p.elo_away, p.elo_h, p.elo_d, p.elo_a, p.mkt_h, p.mkt_d, p.mkt_a,
+               {LAMBDAS}
+        from core.team_matches t
+        left join forecast.wf_predictions p using (match_id)
+        left join stg.fd_matches f using (fd_match_id)
+        left join stg.tm_games g on t.match_id = 'tm-' || g.game_id""",
+    "match_events": """
+        select 'tm-' || e.game_id match_id, e.minute, e.added, e.type,
+               'tm-' || e.club_id club_id, 'tm-' || e.player_id player_id,
+               'tm-' || e.player_in_id player_in_id, 'tm-' || e.player_assist_id assist_id,
+               e.is_penalty, e.is_own_goal, e.card
+        from stg.tm_events e
+        where 'tm-' || e.game_id in (select match_id from core.team_matches)""",
+    "match_lineups": """
+        select 'tm-' || l.game_id match_id, 'tm-' || l.club_id club_id,
+               'tm-' || l.player_id player_id, l.starter, l.slot, l.position_group, l.shirt,
+               l.captain
+        from stg.tm_lineups l
+        where 'tm-' || l.game_id in (select match_id from core.team_matches)""",
+    "zones_team": """
+        select coalesce(c.canonical_id, z.provider || '-' || z.team_id) club_id, z.provider,
+               z.competition_id, z.season, z.side, z.zx, z.zy, z.touches, z.passes,
+               z.passes_ok, z.receptions, round(z.xt_added, 4)::float xt_added,
+               round(z.vaep_off, 4)::float vaep_off, round(z.vaep_def, 4)::float vaep_def,
+               z.shots, round(z.xg, 4)::float xg, z.goals, z.def_actions, z.pressures,
+               z.turnovers, g.matches
+        from metrics.zones_team z
+        join metrics.zones_team_games g using (provider, competition_id, season, team_id)
+        left join {XW_CLUB} c on c.source = z.provider and c.source_id = z.team_id::varchar""",
+    "zones_player": """
+        select coalesce(x.canonical_id, z.provider || '-' || z.player_id) player_id,
+               z.provider, z.competition_id, z.season, z.zx, z.zy, z.touches,
+               round(z.xt_added, 4)::float xt_added, round(z.vaep_off, 4)::float vaep_off,
+               round(z.vaep_def, 4)::float vaep_def, z.shots, round(z.xg, 4)::float xg,
+               z.goals, z.def_actions, z.pressures, z.turnovers
+        from metrics.zones_player z
+        left join {XW_PLAYER} x on x.source = z.provider and x.source_id = z.player_id""",
+    "xt_grid": """select cx, cy, x_mid, y_mid, xt from metrics.xt_grid
+                  where subset = 'pooled'""",
+    "transfers": """
+        select 'tm-' || t.player_id player_id, t.transfer_date, t.transfer_season,
+               'tm-' || t.from_club_id from_club, 'tm-' || t.to_club_id to_club,
+               t.from_club_name, t.to_club_name, t.fee_eur, t.value_eur
+        from stg.tm_transfers t
+        where t.transfer_date >= '2012-07-01'
+          and (t.from_club_id in (select club_id from stg.tm_clubs)
+               or t.to_club_id in (select club_id from stg.tm_clubs))""",
+    "valuations": """
+        select 'tm-' || v.player_id player_id, v.value_date, v.value_eur,
+               'tm-' || v.club_id club_id
+        from stg.tm_valuations v
+        where v.value_date >= '2010-01-01'
+          and v.player_id in (select player_id from ratings.player_season_c)""",
+    "matchup_factors": "select * from research.matchup_factors",
+    "matchup_factor_bins": "select * from research.matchup_factor_bins",
     "timelines": """
         select w.match_id, w.minute::tinyint as minute, w.gd::tinyint as gd,
                w.p_home::float p_home, w.p_draw::float p_draw, w.p_away::float p_away
@@ -198,11 +261,18 @@ def build(publish_dir: Path = OUT) -> dict:
     publish_dir.mkdir(parents=True)
     files, rows = {}, {}
     with connect(paths, read_only=True) as con:
+        hl, w = con.execute("select half_life, w_goals from forecast.wf_chosen").fetchall()[0]
+        lambdas = (f"exp({w} * ln(p.lh_g_{hl}) + {1 - w} * ln(coalesce(p.lh_x_{hl}, "
+                   f"p.lh_g_{hl}))) lh, exp({w} * ln(p.la_g_{hl}) + {1 - w} * "
+                   f"ln(coalesce(p.la_x_{hl}, p.la_g_{hl}))) la, p.rho_{hl} rho")  # fmt: skip
         for name, sql in TABLES.items():
-            sql = sql.replace("{XW_PLAYER}", XW_PLAYER).replace("{XW_CLUB}", XW_CLUB)
+            sql = (sql.replace("{XW_PLAYER}", XW_PLAYER).replace("{XW_CLUB}", XW_CLUB)
+                   .replace("{LAMBDAS}", lambdas))  # fmt: skip
             tmp = publish_dir / f"{name}.parquet"
-            con.execute(f"copy ({sql}) to '{tmp.as_posix()}' (format parquet, "
-                        "compression zstd)")  # fmt: skip
+            # sorted rows: unchanged data gives identical bytes, so an unchanged table keeps
+            # its file name and the version only moves when something really changed
+            con.execute(f"copy (select * from ({sql}) order by all) to '{tmp.as_posix()}' "
+                        "(format parquet, compression zstd, row_group_size 50000)")  # fmt: skip
             h = hashlib.sha256(tmp.read_bytes()).hexdigest()[:8]
             final = publish_dir / f"{name}.{h}.parquet"
             tmp.rename(final)

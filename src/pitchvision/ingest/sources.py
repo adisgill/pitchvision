@@ -7,6 +7,7 @@ Licences and terms are summarised in ``docs/phase0/source_inventory.md``.
 from __future__ import annotations
 
 import json
+from datetime import date
 from pathlib import Path
 
 import httpx
@@ -14,6 +15,7 @@ import httpx
 # ---- StatsBomb open data (github.com/hudl/open-data) -----------------------------------------
 from pitchvision.catalog import SB_COMMIT, SB_COMMIT_BL1516, SB_TIER_A, _sb_commit
 from pitchvision.ingest.fetch import Fetcher
+from pitchvision.ingest.fotmob import fotmob
 
 SB_RAW = "https://raw.githubusercontent.com/hudl/open-data/{commit}/data/{path}"
 
@@ -120,7 +122,15 @@ FD_EXTRA = {"USA": "https://www.football-data.co.uk/new/USA.csv"}
 FD_FIRST_SEASON = 2012  # 2012-13: first season with Pinnacle closing odds
 
 
-def footballdata(root: Path, sample: bool = True, last_season: int = 2026) -> list[Path]:
+def current_season(today: date | None = None) -> int:
+    """Start year of the season in progress (seasons turn over on 1 July)."""
+    d = today or date.today()
+    return d.year if d.month >= 7 else d.year - 1
+
+
+def footballdata(root: Path, sample: bool = True, last_season: int | None = None) -> list[Path]:
+    """Every season since 2012-13; only the current season's files are re-downloaded."""
+    last_season = last_season or current_season()
     got: list[Path] = []
     with Fetcher("footballdata", root, min_interval=3.0) as f:
         got.append(f.get("https://www.football-data.co.uk/notes.txt", "notes.txt", refresh=True))
@@ -136,4 +146,4 @@ def footballdata(root: Path, sample: bool = True, last_season: int = 2026) -> li
 
 
 SOURCES = {"statsbomb": statsbomb, "wyscout": wyscout, "transfermarkt": transfermarkt,
-           "footballdata": footballdata}  # fmt: skip
+           "footballdata": footballdata, "fotmob": fotmob}  # fmt: skip

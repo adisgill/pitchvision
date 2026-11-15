@@ -32,6 +32,7 @@ def ingest(
 @app.command()
 def build(
     strict: bool = typer.Option(True, "--strict/--no-strict", help="Fail on QA failures."),
+    daily: bool = typer.Option(False, "--daily", help="Only the stages new results change."),
 ) -> None:
     """Rebuild every table from the raw caches (never fetches)."""
     import logging
@@ -39,7 +40,7 @@ def build(
     from pitchvision import build as b
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s")
-    typer.echo(b.run(strict=strict))
+    typer.echo(b.run(strict=strict, daily=daily))
 
 
 @app.command()
