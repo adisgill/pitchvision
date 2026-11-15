@@ -273,6 +273,29 @@ SIM_CHECKS = [
 ]  # fmt: skip
 
 
+RAPM_CHECKS = [
+    Check("rapm: ratings finite (share)", """
+        select 'all' scope, avg((isfinite(rapm) and isfinite(prior))::int) value
+        from ratings.player_rapm""", 1.0),
+    Check("rapm: chosen model beats raw on/off predicting next-season team GD (r gain)", """
+        with c as (select * from metrics.rapm_chosen)
+        select 'test' scope,
+               (select r from metrics.rapm_eval e, c where e.variant = 'rapm + prior'
+                  and e.split = 'test' and e.decay = c.decay and e.lam = c.lam)
+               - (select r from metrics.rapm_eval e, c where e.variant = 'raw on/off'
+                  and e.split = 'test' and e.decay = c.decay and e.lam = c.lam) value""",
+          0.0),
+    Check("rapm: gain over the prior alone, test seasons (r; info)", """
+        with c as (select * from metrics.rapm_chosen)
+        select 'test' scope,
+               (select r from metrics.rapm_eval e, c where e.variant = 'rapm + prior'
+                  and e.split = 'test' and e.decay = c.decay and e.lam = c.lam)
+               - (select r from metrics.rapm_eval e, c where e.variant = 'prior only'
+                  and e.split = 'test' and e.decay = c.decay and e.lam = c.lam) value""",
+          0.02, blocking=False),
+]  # fmt: skip
+
+
 def event_checks(prefix: str, provider: str) -> list[Check]:
     issues = (OVERRIDES / "event_known_issues.csv").as_posix()
     return [
@@ -300,6 +323,8 @@ def run(con, checks: list[Check] | None = None) -> pd.DataFrame:
             checks += FD_CHECKS
         if has_table(con, "ratings", "player_season_c"):
             checks += RATING_CHECKS
+        if has_table(con, "ratings", "player_rapm"):
+            checks += RAPM_CHECKS
         if has_table(con, "metrics", "shots"):
             checks += XG_CHECKS
         if has_table(con, "metrics", "xt_fit") and has_table(con, "metrics", "player_minutes_a"):

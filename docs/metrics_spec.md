@@ -546,6 +546,52 @@ in the mirror** and get no stints.
   - the effective sample size.
 - Players with < 1,500 stint minutes or > 85% minutes overlap show "prior-dominated".
 
+*Change, Nov 15 (Phase 1, goal-RAPM built):* `ratings/rapm.py`.
+
+**Data and fitting**
+
+- 243,984 valid stints (domestic leagues plus CL / EL / UECL), 19,774 players, and a
+  home-advantage term per competition-season.
+- Solved by conjugate gradient without forming X'WX: 0.7 s per fit.
+- The prior is a minutes-weighted regression of the no-prior RAPM on non-penalty goals per
+  90, assists per 90, minutes share, log market value and position group. It is fitted on
+  earlier seasons only.
+- **The tuning grid was widened** to ridge 30-1000 after the first run chose the top of a
+  10-100 grid.
+- Chosen on 2015-2019: decay 0.75 per season, ridge 300.
+- 2013-14 are warm-up seasons (the prior has no history yet) and are left out of the
+  evaluation. A first run had wrongly counted them as test seasons.
+
+**Validation: next-season team goal difference per 90** from the players each team actually
+fielded, test seasons 2020-21 → 2024-25 (5 seasons, about 600 team-seasons):
+
+| Variant | r | RMSE |
+|---|---|---|
+| **RAPM + prior (chosen settings)** | **0.818** | **0.455** |
+| Prior alone, same settings | 0.812 | 0.580 |
+| Prior alone, best setting | 0.817 | 0.463 |
+| RAPM without prior, best setting | 0.802 | 0.461 |
+| Raw on/off | 0.736 | 0.501 |
+
+**The honest reading**
+
+- Adjusted plus-minus with the prior is clearly better than raw on/off (+0.08 r).
+- **Almost all of that gain is the prior.** The box score plus market value (D13) carry the
+  signal, and the on-pitch adjustment adds +0.001 to +0.006 r.
+- **Soccer lineups are this collinear:** a regular shares a median 94-96% of his minutes
+  with his most frequent teammate (usually the goalkeeper or a centre-back).
+- **The data share is small:** the share of a regular's rating coming from his own minutes
+  is a median 0.17 (max 0.36). This is an upper bound of exposure / (exposure + λ);
+  collinearity lowers it further.
+- Every rating carries `data_weight`. `prior_dominated` (data weight < 0.5) is true for
+  nearly every player, and **the app must say so** next to any RAPM number.
+- The spec's `max_overlap > 0.85` rule would have flagged 92% of players; it's replaced by
+  the data-weight rule, and overlap is reported only.
+
+**Known-answer check (2024-25 top, ≥ 40 decayed 90s):** Hakimi, Grimaldo, Rodri,
+Marquinhos, Ederson, Kane, Salah, Dembélé, Rúben Dias, Lewandowski, Mbappé, Kimmich,
+De Bruyne.
+
 **xG-RAPM**
 
 - The same within each tier-A season (one season of about 1,826 matches).

@@ -33,6 +33,10 @@ def run(strict: bool = True) -> dict:
                 from pitchvision.metrics import players
 
                 out["players"] = players.build(con, paths)
+            with stage("ratings: impact (goal RAPM with box prior)"):
+                from pitchvision.ratings import rapm
+
+                out["rapm"] = rapm.build(con, paths)
         if (paths.source("wyscout") / "events" / "events.zip").exists():
             with stage("stg: wyscout"):
                 from pitchvision.stg import wyscout
