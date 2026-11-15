@@ -252,6 +252,27 @@ TEAM_CHECKS = [
 ]  # fmt: skip
 
 
+SIM_CHECKS = [
+    Check("season sim: each club's position probabilities sum to 1 (worst error)", """
+        with u as (unpivot (select competition_id, club_id, columns('^p_pos_')
+                            from forecast.season_sim)
+                   on columns('^p_pos_') into name pos value p)
+        select competition_id scope, max(abs(s - 1)) value
+        from (select competition_id, club_id, sum(p) s from u group by all)
+        group by 1""", 1e-9, higher_is_better=False),
+    Check("season sim: title probabilities sum to 1 per league (worst error)", """
+        select competition_id scope, abs(sum(p_title) - 1) value
+        from forecast.season_sim group by 1""", 1e-6, higher_is_better=False),
+    Check("season backtest: strengths beat equal strength at halfway (Brier gain, zone)", """
+        select e.zone scope,
+               sum(q.brier * q.n) / sum(q.n) - sum(e.brier * e.n) / sum(e.n) value
+        from forecast.season_backtest_eval e join forecast.season_backtest_eval q
+          on q.league = e.league and q.zone = e.zone and q.variant = 'equal strength'
+        where e.variant = 'model' and e.zone in ('title', 'top4', 'relegation')
+        group by 1""", 0.0),
+]  # fmt: skip
+
+
 def event_checks(prefix: str, provider: str) -> list[Check]:
     issues = (OVERRIDES / "event_known_issues.csv").as_posix()
     return [
@@ -287,6 +308,8 @@ def run(con, checks: list[Check] | None = None) -> pd.DataFrame:
             checks += VAEP_CHECKS
         if has_table(con, "forecast", "wf_eval") and has_table(con, "ratings", "team_season"):
             checks += TEAM_CHECKS
+        if has_table(con, "forecast", "season_backtest_eval"):
+            checks += SIM_CHECKS
     rows = []
     for c in checks:
         df = con.execute(c.sql).df()

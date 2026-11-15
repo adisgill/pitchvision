@@ -1,0 +1,82 @@
+# League rules for the season simulator (spec 7.2). Committed, hand-maintained, and
+# re-verified every season. `verified` records how each entry was checked:
+#   "official"  - the league's own regulations
+#   "secondary" - consistent press / reference sources, official text not yet read
+#   "assumed"   - carried from an earlier season, not re-checked
+#
+# tiebreak: applied in order to clubs level on points. Keys:
+#   gd, gf            overall goal difference, goals scored
+#   h2h_points, h2h_gd, h2h_gf   mini-league among the tied clubs
+#   (any tie still left is broken at random, standing in for later criteria such as fair
+#   play or a drawing of lots)
+# playoff_positions: a two-way tie on points straddling these positions is settled by a
+#   one-off neutral play-off instead (Serie A: the title and the last relegation place).
+# size: clubs per season; `sizes` maps the first season of each size ("2012" = 20).
+# zones: 1-based inclusive position ranges; negative numbers count from the bottom
+#   (-1 = last), so relegation zones stay right when a league changes size. European
+#   places beyond the Champions League depend on cup winners and UEFA coefficients, so
+#   "europe" is an approximation; relegation counts are those of the current format
+#   (Ligue 1 relegated four in 2022-23 while shrinking to 18; not modelled).
+
+[GB1]
+name = "Premier League"
+size = 20
+tiebreak = ["gd", "gf", "h2h_points", "h2h_gf"]
+verified = "secondary"
+zones = { title = [1, 1], top4 = [1, 4], europe = [1, 7], relegation = [-3, -1] }
+
+[ES1]
+name = "La Liga"
+size = 20
+tiebreak = ["h2h_points", "h2h_gd", "gd", "gf"]
+verified = "secondary"
+zones = { title = [1, 1], top4 = [1, 4], europe = [1, 7], relegation = [-3, -1] }
+
+[IT1]
+name = "Serie A"
+size = 20
+tiebreak = ["h2h_points", "h2h_gd", "gd", "gf"]
+playoff_positions = [1, 17]
+verified = "secondary"
+zones = { title = [1, 1], top4 = [1, 4], europe = [1, 7], relegation = [-3, -1] }
+
+[L1]
+name = "Bundesliga"
+size = 18
+tiebreak = ["gd", "gf", "h2h_points", "h2h_gd"]
+verified = "secondary"
+zones = { title = [1, 1], top4 = [1, 4], europe = [1, 7], relegation = [-2, -1], relegation_playoff = [-3, -3] }
+
+[FR1]
+name = "Ligue 1"
+sizes = { "2012" = 20, "2023" = 18 }
+# LFP change for 2025-26: goal difference before head-to-head (assumed unchanged 2026-27)
+tiebreak = ["gd", "h2h_points", "h2h_gd", "gf"]
+verified = "secondary"
+zones = { title = [1, 1], top4 = [1, 4], europe = [1, 6], relegation = [-2, -1], relegation_playoff = [-3, -3] }
+
+[NL1]
+name = "Eredivisie"
+size = 18
+tiebreak = ["gd", "gf", "h2h_points", "h2h_gd"]
+verified = "secondary"
+zones = { title = [1, 1], top4 = [1, 2], europe = [1, 5], relegation = [-2, -1], relegation_playoff = [-3, -3] }
+
+[PO1]
+name = "Primeira Liga"
+sizes = { "2012" = 16, "2014" = 18 }
+tiebreak = ["h2h_points", "h2h_gd", "gd", "gf"]
+verified = "secondary"
+zones = { title = [1, 1], top4 = [1, 2], europe = [1, 5], relegation = [-2, -1], relegation_playoff = [-3, -3] }
+
+[GB2]
+name = "Championship"
+size = 24
+tiebreak = ["gd", "gf", "h2h_points", "h2h_gf"]
+verified = "assumed"
+# "title" = champions; "top4" here = automatic promotion (top 2); "europe" = top 6
+# (automatic promotion plus play-offs)
+zones = { title = [1, 1], top4 = [1, 2], europe = [1, 6], relegation = [-3, -1] }
+
+# MLS is not simulated: its unbalanced schedule can't be derived from results alone and
+# needs a fixture list (football-data.org, Phase 4).

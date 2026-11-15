@@ -77,6 +77,10 @@ def run(strict: bool = True) -> dict:
                 from pitchvision.ratings import team
 
                 out["team_ratings"] = team.build(con, paths)
+            with stage("forecast: season simulator (current season + halfway backtest)"):
+                from pitchvision.forecast import season
+
+                out["season_sim"] = season.build(con, paths)
         if has_table(con, "metrics", "shots"):
             with stage("models: expected threat"):
                 from pitchvision.models import xt

@@ -940,6 +940,63 @@ Against the real team xG available for 2026-27, it correlates 0.43-0.75 per team
   for the current season is not possible (no current player data). Historical seasons can
   use RAPM.
 
+*Change, Nov 15 (Phase 1, simulator built):* `forecast/season.py`.
+
+**Rules file**
+
+- `rules/leagues.toml` lives at the repo root (committed), not `data/rules/`. It records
+  tiebreak order, per-season club counts (Ligue 1 20 → 18 from 2023-24, Primeira 16 → 18
+  from 2014-15), zones counted from the bottom for relegation, and a `verified` level per
+  league.
+- **No league is "official" yet.** These are "secondary" (press and reference sources,
+  official texts not yet read):
+  - Ligue 1's 2025-26 switch to goal difference before head-to-head;
+  - Serie A's play-off for a tie at 1st or at the last relegation place;
+  - head-to-head first in La Liga, Serie A and Primeira.
+- The Championship is "assumed".
+- MLS isn't simulated (unbalanced schedule; needs a fixture list, Phase 4).
+- **Not modelled:** points deductions, and European places that depend on cup winners
+  ("europe" is approximate).
+
+**Method**
+
+- Remaining fixtures are the unplayed ordered pairs.
+- **Uncertainty comes from Laplace posterior draws** (the walk-forward's chosen model plus
+  its inverse-Hessian covariance, prior included), with a shared draw for the goals and xG
+  fits. 10,000 runs per league.
+  - A bootstrap of matches was tried first and dropped: a promoted club's strength swung
+    from −0.7 to +0.65 with ~10 matches.
+- Tables use official results, with head-to-head mini-leagues computed per run.
+- The current season's odds are appended to `forecast.season_sim_history` on every build.
+
+**Backtest** (every complete season 2017-18 → 2025-26 from its halfway date; abandoned
+2019-20 seasons skipped; 2,756 club-seasons)
+
+| Zone | Brier, model | Brier, equal strength | Skill |
+|---|---|---|---|
+| Title | 0.0157 | 0.0196 | +20% |
+| Top four | 0.0344 | 0.0427 | +19% |
+| "Europe" | 0.0624 | 0.0718 | +13% |
+| Relegation | 0.0558 | 0.0605 | +8% |
+| Relegation play-off place | 0.0480 | 0.0481 | ±0% |
+
+- By league-zone, three of the 37 cells are slightly negative (Primeira title −10%,
+  Ligue 1 top four −3%, Serie A title −1%), from nine seasons each.
+- **Calibration** (title, top four and relegation pooled) is good but **slightly
+  underconfident at the edges**:
+
+  | Forecast band | Happened |
+  |---|---|
+  | 0.01-0.05 | 1.1% |
+  | 0.15-0.30 | 18.6% |
+  | 0.50-0.70 | 66% |
+  | 0.85-0.95 | 95% |
+
+  The posterior tails are a little wide (promoted clubs especially). Tightening the prior
+  is a Phase 2 item.
+- **Current season** (as of 8 Nov 2026): for example, Arsenal 72% for the title, Bayern
+  90%, Paris SG 81%, Barcelona 71%, Inter 58%, PSV 64%, Porto 57%.
+
 ### 7.3 Player projections (historical backtest only)
 
 - Next-match start probability and minutes, goals, assists and cards from tier-C data.
