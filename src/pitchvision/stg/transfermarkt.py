@@ -4,9 +4,13 @@ Documented repairs and derivations (see docs/phase0/data_profile.md):
 
 * ``minute = -1`` means unknown: stored as null.
 * TM collapses added time into minute 45 / 90, so ``added`` is always null here.
-* ``home_goals`` / ``away_goals`` are TM's reported score, which **includes penalty-shootout
-  goals** for matches decided by a shootout (``shootout = true``); the score after 90 / 120
-  minutes is the goal events.
+* ``home_goals`` / ``away_goals`` are the score **as played** and ``*_official`` the result
+  that counts in the table (they differ only for awarded matches). Both come from TM unless
+  ``overrides/match_scores.csv`` corrects them (cross-checked with football-data.co.uk).
+  TM's score **includes penalty-shootout goals** for matches decided by a shootout
+  (``shootout = true``); the score after 90 / 120 minutes is the goal events.
+* Calendar-year leagues (MLS, Brazil, ...) carry their calendar year as ``season``; TM labels
+  them by the year before.
 * Goals: ``is_penalty`` / ``is_own_goal`` from the description (", Penalty", ", Own-goal").
 * Cards: ``card`` in {yellow, second_yellow, red}; ``season_yellow_n`` = the "N." season
   count TM prints before a yellow card, when present.
@@ -36,8 +40,14 @@ def _raw(paths: Paths, table: str) -> str:
     return f"read_csv_auto('{p}', sample_size=-1)"
 
 
+def _season(season: str, comp: str) -> str:
+    """TM labels calendar-year leagues by the year before (its MLS "2024" ran Feb-Dec 2025);
+    we use the calendar year."""
+    return f"case when {comp} in {CALENDAR_YEAR} then {season} + 1 else {season} end"
+
+
 def _season_label(season: str, comp: str) -> str:
-    return (f"case when {comp} in {CALENDAR_YEAR} then {season}::varchar "
+    return (f"case when {comp} in {CALENDAR_YEAR} then ({season} + 1)::varchar "
             f"else {season}::varchar || '-' || lpad((({season} + 1) % 100)::varchar, 2, '0') "
             "end")  # fmt: skip
 
@@ -82,16 +92,22 @@ def build(con, paths: Paths) -> dict[str, int]:
         "stg",
         "tm_games",
         f"""
-        select game_id, competition_id, competition_type, season,
+        select g.game_id, competition_id, competition_type,
+               {_season("season", "competition_id")} as season,
                {_season_label("season", "competition_id")} as season_label,
                round, date as match_date, home_club_id, away_club_id,
-               home_club_goals as home_goals, away_club_goals as away_goals,
+               coalesce(o.played_home, home_club_goals) as home_goals,
+               coalesce(o.played_away, away_club_goals) as away_goals,
+               coalesce(o.official_home, home_club_goals) as home_goals_official,
+               coalesce(o.official_away, away_club_goals) as away_goals_official,
                home_club_manager_name as home_manager, away_club_manager_name as away_manager,
                referee, stadium, attendance, home_club_formation as home_formation,
                away_club_formation as away_formation, home_club_name, away_club_name,
-               game_id in (select game_id from {_raw(paths, "game_events")}
-                           where type = 'Shootout') as shootout
-        from {_raw(paths, "games")}""",
+               g.game_id in (select game_id from {_raw(paths, "game_events")}
+                             where type = 'Shootout') as shootout
+        from {_raw(paths, "games")} g
+        left join read_csv('{(OVERRIDES / "match_scores.csv").as_posix()}', header = true,
+                           types = {{'game_id': 'BIGINT'}}) o on o.game_id = g.game_id""",
     )
     n["tm_appearances"] = materialize(
         con,

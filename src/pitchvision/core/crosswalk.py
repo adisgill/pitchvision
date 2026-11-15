@@ -210,6 +210,96 @@ def _overrides() -> pd.DataFrame:
     return pd.read_csv(p, dtype=str)
 
 
+FD_TM_COMPS = ("GB1", "ES1", "L1", "IT1", "FR1", "NL1", "PO1", "MLS1")
+
+
+def _footballdata(con) -> tuple[pd.DataFrame, list[dict], pd.DataFrame]:
+    """football-data.co.uk has team names only. Clubs are voted over every season it shares
+    with TM (names are stable across seasons and divisions, so a club seen in the PL keeps
+    its id in the Championship); matches map by clubs and date ±1 day. Matches TM doesn't
+    have (the current season, the Championship, MLS before 2024) keep ``fd-`` ids. Score
+    disagreements with TM go to QA."""
+    fd = con.execute("""
+        select fd_match_id match_id, competition_id, match_date, home_team home_id,
+               away_team away_id, home_team home_name, away_team away_name, season,
+               home_goals, away_goals
+        from stg.fd_matches""").df()  # fmt: skip
+    tm = con.execute(f"""
+        select game_id match_id, competition_id, match_date, home_club_id home_id,
+               away_club_id away_id, home_club_name home_name, away_club_name away_name,
+               home_goals, away_goals, home_goals_official, away_goals_official, shootout
+        from stg.tm_games where competition_id in {FD_TM_COMPS}""").df()  # fmt: skip
+    # voted per (name, season): a name can change hands (Belenenses: CF Os Belenenses to
+    # 2017-18, then B SAD), and a club seen in TM keeps that id in seasons TM lacks
+    shared = fd[fd.competition_id.isin(FD_TM_COMPS)].copy()
+    for side in ("home", "away"):
+        shared[f"{side}_id"] = shared[f"{side}_name"] + "|" + shared.season.astype(str)
+    c = map_clubs(shared, tm).assign(source="footballdata")
+    by_season = dict(zip(c.source_id, c.canonical_id, strict=True))
+    latest: dict[str, str] = {}
+    for sid in sorted(by_season, key=lambda x: int(x.rsplit("|", 1)[1])):
+        latest[sid.rsplit("|", 1)[0]] = by_season[sid]
+    own = []
+    for name in sorted(set(fd.home_id) | set(fd.away_id)):
+        if name not in latest:  # Championship-only and early-MLS clubs: own ids
+            latest[name] = f"fd-{norm(name).replace(' ', '-')}"
+            own.append(
+                {
+                    "source": "footballdata",
+                    "source_id": name,
+                    "source_name": name,
+                    "canonical_id": latest[name],
+                    "method": "own",
+                    "confidence": 1.0,
+                }
+            )
+    c = pd.concat([c, pd.DataFrame(own)], ignore_index=True)
+
+    def club(name: str, season: int) -> str:
+        return by_season.get(f"{name}|{season}", latest[name])
+
+    tmm = tm.assign(match_date=pd.to_datetime(tm.match_date))
+    key = {(f"tm-{r.home_id}", f"tm-{r.away_id}", r.match_date + pd.Timedelta(days=d)): r
+           for r in tmm.itertuples(index=False) for d in (-1, 0, 1)}  # fmt: skip
+    # fallback for rescheduled dates: in a league season each home-away pairing is played
+    # once, so the same clubs within 14 days with the same score is the same match
+    by_pair = defaultdict(list)
+    for r in tmm.itertuples(index=False):
+        by_pair[(f"tm-{r.home_id}", f"tm-{r.away_id}", r.competition_id)].append(r)
+    matches, disagree = [], []
+    for r in fd.itertuples(index=False):
+        h, a, day = club(r.home_id, r.season), club(r.away_id, r.season), pd.Timestamp(r.match_date)
+        g, method = key.get((h, a, day)), "clubs+date"
+        if g is None:
+            near = [x for x in by_pair.get((h, a, r.competition_id), [])
+                    if abs((x.match_date - day).days) <= 14
+                    and (r.home_goals, r.away_goals) in ((x.home_goals, x.away_goals),
+                                                         (x.home_goals_official,
+                                                          x.away_goals_official))]  # fmt: skip
+            if len(near) == 1:
+                g, method = near[0], "clubs+score, date differs"
+        matches.append({"source": "footballdata", "source_id": r.match_id,
+                        "canonical_id": f"tm-{g.match_id}" if g else f"fd-{r.match_id}",
+                        "method": method if g else "own"})  # fmt: skip
+        if (
+            g is not None
+            and not g.shootout
+            and (r.home_goals, r.away_goals)
+            not in ((g.home_goals, g.away_goals), (g.home_goals_official, g.away_goals_official))
+        ):
+            disagree.append(
+                {
+                    "entity": "match",
+                    "source": "footballdata",
+                    "source_id": r.match_id,
+                    "reason": "score differs from Transfermarkt",
+                    "candidates": f"fd {r.home_goals:.0f}-{r.away_goals:.0f} vs tm "
+                    f"{g.home_goals}-{g.away_goals} (tm-{g.match_id})",
+                }
+            )
+    return c, matches, pd.DataFrame(disagree)
+
+
 def build(con, paths: Paths) -> dict[str, int]:
     clubs, matches, players, qa = [], [], [], []
     sources = []
@@ -259,6 +349,11 @@ def build(con, paths: Paths) -> dict[str, int]:
                     "method": "own",
                 }
             )
+    if has_table(con, "stg", "fd_matches"):
+        c, m, q = _footballdata(con)
+        clubs.append(c)
+        matches += m
+        qa.append(q)
     clubs_df = pd.concat(clubs, ignore_index=True).drop_duplicates(["source", "source_id"])
     matches_df = pd.DataFrame(matches)
 

@@ -49,6 +49,16 @@ def run(strict: bool = True) -> dict:
             if parts:
                 con.execute("create or replace view stg.actions as "
                             + " union all by name ".join(parts))  # fmt: skip
+        if has_table(con, "stg", "actions"):
+            with stage("models: xG (fit leave-one-season-out, then all shots)"):
+                from pitchvision.models import xg
+
+                out["xg"] = xg.build(con, paths)
+        if (paths.source("footballdata") / "notes.txt").exists():
+            with stage("stg: football-data.co.uk"):
+                from pitchvision.stg import footballdata
+
+                out["footballdata"] = footballdata.build(con, paths)
         if has_table(con, "stg", "tm_games"):
             with stage("core: crosswalk"):
                 from pitchvision.core import crosswalk

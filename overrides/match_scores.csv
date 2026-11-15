@@ -1,0 +1,5 @@
+game_id,played_home,played_away,official_home,official_away,source,note
+2353759,2,0,2,0,football-data.co.uk + TM goal events,"FR1 2013-14 Nantes v Bastia: TM score field 0-0; its own goal events and football-data.co.uk both give 2-0"
+2331179,1,4,1,4,football-data.co.uk + TM score,"FR1 2013-14 Lorient v Lille: TM score and football-data.co.uk agree on 1-4; TM goal events are missing one goal"
+2848788,0,0,0,3,TM (played) + football-data.co.uk (official),"FR1 2016-17 Bastia v Lyon: TM 0-0, football-data.co.uk 0-3; consistent with an abandoned match awarded 0-3. Models use the played score, standings the official one"
+3433194,0,0,3,0,football-data.co.uk (played) + TM (official),"IT1 2020-21 Verona v Roma: football-data.co.uk 0-0, TM 3-0; consistent with a result awarded 3-0. Models use the played score, standings the official one"

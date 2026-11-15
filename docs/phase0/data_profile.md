@@ -124,7 +124,45 @@ Each source has a `manifest.jsonl` recording url, UTC fetch time, bytes and sha2
   target, corners, cards, odds, closing odds; xG columns to be confirmed when you run the
   fetch) plus football-data.org for live fixtures and results.
 
+## football-data.co.uk (profiled Nov 14, after you ran the fetch)
+
+121 files, 16 MB: 8 leagues × 2012-13 → 2026-27, plus MLS. 48,543 matches.
+
+| Layer | Coverage |
+|---|---|
+| Results | every league-season, complete; 2026-27 has 81-180 matches per league (through 8 Nov) |
+| Team xG (`HxG` / `AxG`) | **2026-27 only**, all 8 leagues; no history |
+| Pinnacle closing 1X2 | complete 2012-13 → 2024-25; **about 50% of 2025-26**, which confirms the site's warning about its Pinnacle feed; none in 2026-27 |
+| Market-average closing 1X2 (`AvgC*`) | complete from 2019-20, current season included |
+| Shots / on target, corners, fouls, cards | big five and Championship from 2012-13; Eredivisie and Primeira from 2017-18 |
+| Referee | England only (PL all seasons; Championship from 2013-14) |
+| Kick-off time (UK) | from 2019-20 |
+| MLS | results and closing odds 2012-2026, no match stats |
+
+**Formats.** Dates are `dd/mm/yy` in older files and `dd/mm/yyyy` in newer ones, so both
+are parsed explicitly. Files start with a UTF-8 byte-order mark.
+
+**Crosswalk to Transfermarkt.** Clubs are matched by fixture voting per (name, season),
+because "Belenenses" refers to two different clubs before and after 2018. Every big-five
+match from 2012-13 to 2025-26 maps.
+
+**Three score disagreements**, now in `overrides/match_scores.csv`:
+
+- **Nantes–Bastia 2013-14.** football-data.co.uk agrees with Transfermarkt's goal events
+  (2-0), so Transfermarkt's 0-0 score field is wrong.
+- **Bastia–Lyon 2016-17 and Verona–Roma 2020-21.** One source has 0-0 and the other 3-0,
+  consistent with awarded results. Both scores are kept: the played score for models, the
+  official result for standings.
+
+**Lorient–Lille 2013-14** (score 1-4, events 1-3): football-data.co.uk agrees with 1-4, so
+Transfermarkt's goal events are missing one.
+
+**Transfermarkt season labels.** Transfermarkt labels calendar-year leagues one year early:
+its MLS "2024" ran February-December 2025. Staging now uses the calendar year.
+
 ## Still to verify (needs the football-data.co.uk files)
+
+*Done Nov 14: see the section above.*
 
 - Which leagues and seasons have `HxG` / `AxG`, and the referee column.
 - Closing-odds columns by season. Whether Pinnacle closing odds are populated after

@@ -107,6 +107,22 @@ _IN_FRAME = """
     from stg.{p}_actions where start_x is not null"""
 
 
+FD_CHECKS = [
+    Check("footballdata: matches mapped to TM, seasons TM covers (share)", """
+        select f.competition_id || ' ' || f.season scope,
+               avg((x.canonical_id like 'tm-%')::int) value
+        from stg.fd_matches f join core.crosswalk x
+             on x.entity = 'match' and x.source = 'footballdata'
+             and x.source_id = f.fd_match_id
+        where f.competition_id in ('GB1', 'ES1', 'L1', 'IT1', 'FR1', 'NL1', 'PO1')
+          and f.season <= 2025
+        group by 1""", 0.995),
+    Check("footballdata: scores that disagree with TM after overrides (count)", """
+        select 'all' scope, count(*) value from core.crosswalk_qa
+        where source = 'footballdata' and reason = 'score differs from Transfermarkt'""",
+          0, higher_is_better=False),
+]  # fmt: skip
+
 CROSSWALK_CHECKS = [
     Check("crosswalk: men's event matches mapped to a TM match (share)", """
         select source scope, avg((canonical_id like 'tm-%')::int) value from core.crosswalk
@@ -152,6 +168,23 @@ RATING_CHECKS = [
 ]  # fmt: skip
 
 
+XG_CHECKS = [
+    Check("xg: values in [0, 1] (share)", """
+        select 'all' scope, avg((xg between 0 and 1 and xg_oof between 0 and 1)::int) value
+        from metrics.shots""", 1.0),
+    Check("xg: out-of-fold xG total within 5% of goals, per provider (abs. rel. error)", """
+        select provider scope, abs(sum(xg_oof) - sum(goal)) / sum(goal) value
+        from metrics.shots where situation <> 'penalty' group by 1""", 0.05,
+          higher_is_better=False),
+    Check("xg: chosen model beats the base rate out of fold (log-loss gain)", """
+        select 'all' scope,
+               (select logloss from metrics.xg_eval where model = 'base_rate'
+                and "group" = 'all')
+               - (select min(logloss) from metrics.xg_eval where model in ('logit', 'gbm')
+                  and "group" = 'all') value""", 0.0),
+]  # fmt: skip
+
+
 def event_checks(prefix: str, provider: str) -> list[Check]:
     issues = (OVERRIDES / "event_known_issues.csv").as_posix()
     return [
@@ -175,8 +208,12 @@ def run(con, checks: list[Check] | None = None) -> pd.DataFrame:
             checks += event_checks("sb", "statsbomb")
         if has_table(con, "core", "crosswalk"):
             checks += CROSSWALK_CHECKS
+        if has_table(con, "stg", "fd_matches") and has_table(con, "core", "crosswalk"):
+            checks += FD_CHECKS
         if has_table(con, "ratings", "player_season_c"):
             checks += RATING_CHECKS
+        if has_table(con, "metrics", "shots"):
+            checks += XG_CHECKS
     rows = []
     for c in checks:
         df = con.execute(c.sql).df()
