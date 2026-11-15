@@ -135,6 +135,17 @@ def run(strict: bool = True, daily: bool = False) -> dict:
                 from pitchvision.metrics import zones
 
                 out["zones"] = zones.build(con, paths)
+        if any(paths.source("fotmob").glob("leagues/*/*.html.gz")) and has_table(
+            con, "core", "team_matches"
+        ):
+            with stage("fotmob: staging, crosswalk, current-season metrics"):
+                from pitchvision.core import fm_crosswalk
+                from pitchvision.metrics import fotmob as fm_metrics
+                from pitchvision.stg import fotmob as fm_stg
+
+                out["fotmob"] = fm_stg.build(con, paths)
+                out["fm_crosswalk"] = fm_crosswalk.build(con, paths)
+                out["fm_metrics"] = fm_metrics.build(con, paths)
         if (
             full
             and has_table(con, "forecast", "wf_predictions")

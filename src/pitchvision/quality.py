@@ -387,6 +387,23 @@ ZONE_CHECKS = [
 ]  # fmt: skip
 
 
+FOTMOB_CHECKS = [
+    Check("fotmob: linked matches agree with our score (share of finished matches)", """
+        select x.competition_id || ' ' || x.season scope,
+               avg((f.home_goals = t.home_goals and f.away_goals = t.away_goals)::int) value
+        from core.fm_matches_xw x join stg.fm_fixtures f using (fm_match_id)
+        join core.team_matches t using (match_id)
+        where x.finished and t.played group by 1""", 0.99),
+    Check("fotmob: finished matches linked to ours (share, seasons football-data covers)", """
+        select x.competition_id || ' ' || x.season scope,
+               avg((x.match_id is not null)::int) value
+        from core.fm_matches_xw x
+        where x.finished and x.kickoff_utc <= (select max(match_date) from core.team_matches
+                                               where played)
+        group by 1""", 0.98),
+]  # fmt: skip
+
+
 def event_checks(prefix: str, provider: str) -> list[Check]:
     issues = (OVERRIDES / "event_known_issues.csv").as_posix()
     return [
@@ -434,6 +451,8 @@ def run(con, checks: list[Check] | None = None) -> pd.DataFrame:
             checks += TIER_A_CHECKS
         if has_table(con, "metrics", "zones_team"):
             checks += ZONE_CHECKS
+        if has_table(con, "core", "fm_matches_xw"):
+            checks += FOTMOB_CHECKS
     rows = []
     for c in checks:
         df = con.execute(c.sql).df()

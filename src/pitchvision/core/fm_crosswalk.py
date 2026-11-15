@@ -25,7 +25,7 @@ from pitchvision.config import Paths
 from pitchvision.db import materialize
 
 STOP = {"fc", "afc", "cf", "sc", "ac", "as", "ss", "us", "sv", "vfb", "vfl", "tsg", "fk", "cd",
-        "ud", "rcd", "sd", "ca", "real", "club", "de", "the", "and", "1", "04", "05", "1899",
+        "ud", "rcd", "sd", "ca", "club", "de", "the", "and", "1", "04", "05", "1899",
         "1846", "1909", "1910", "1913", "1907", "sl", "sporting", "calcio",
         "olympique"}  # fmt: skip
 ALIAS = {"wolverhampton wanderers": "wolves", "manchester united": "man united",
@@ -53,11 +53,12 @@ def norm(s: str) -> str:
 
 
 def _sim(a: str, b: str) -> float:
+    """Name similarity that penalises extra words: "Real Madrid" vs "Ath Madrid" or
+    "Paris SG" vs "Paris FC" must not tie (subset-based scores rate them 100)."""
     na, nb = norm(a), norm(b)
-    return max(
-        fuzz.token_set_ratio(na, nb),
-        fuzz.partial_ratio(na, nb) if min(len(na), len(nb)) >= 4 else 0,
-    )
+    if na == nb:
+        return 101.0
+    return 0.7 * fuzz.token_sort_ratio(na, nb) + 0.3 * fuzz.token_set_ratio(na, nb)
 
 
 def _has(v) -> bool:
@@ -94,7 +95,7 @@ def clubs(con) -> pd.DataFrame:
                          "our_name": cand.name.iloc[j], "score": float(s[i, j])})  # fmt: skip
     d = pd.DataFrame(rows)
     # promoted clubs not yet in our league-season table match poorly: keep only good links
-    return d[d.score >= 70]
+    return d[d.score >= 60]
 
 
 def players(con, club_map: pd.DataFrame) -> pd.DataFrame:
