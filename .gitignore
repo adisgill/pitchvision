@@ -35,3 +35,12 @@ Thumbs.db
 
 # personal notes for the owner of this checkout
 docs/your_todo.md
+
+# web app: dependencies, build output and the published demo data
+app/node_modules/
+app/dist/
+app/public/data/
+
+# local tooling
+.claude/
+app/tsconfig.tsbuildinfo

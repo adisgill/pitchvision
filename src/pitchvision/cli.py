@@ -43,6 +43,20 @@ def build(
 
 
 @app.command()
+def demo(
+    publish: bool = typer.Option(
+        False, "--publish", help="Also build the web app and push it to GitHub Pages (network)."
+    ),
+) -> None:
+    """Export the web app's data (app/public/data); optionally build and deploy the site."""
+    from pitchvision import demo as d
+
+    typer.echo(d.build())
+    if publish:
+        typer.echo(f"published data version {d.publish()}")
+
+
+@app.command()
 def version() -> None:
     """Print the version."""
     from importlib.metadata import version as v
