@@ -39,6 +39,9 @@ async function init() {
   const worker = new Worker(bundle.mainWorker!);
   const db = new duckdb.AsyncDuckDB(new duckdb.VoidLogger(), worker);
   await db.instantiate(bundle.mainModule, bundle.pthreadWorker);
+  // sum() over integers returns HUGEINT and decimals arrive as 128-bit words: have DuckDB
+  // hand both over as doubles so every page gets plain numbers
+  await db.open({ query: { castBigIntToDouble: true, castDecimalToDouble: true } });
   for (const file of Object.values(manifest.files)) {
     await db.registerFileURL(file, dataUrl(file), duckdb.DuckDBDataProtocol.HTTP, false);
   }

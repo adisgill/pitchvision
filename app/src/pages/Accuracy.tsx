@@ -1,10 +1,12 @@
 import * as Plot from "@observablehq/plot";
 import { useMemo } from "react";
-import { css, DataTable, Figure, fmt, LEAGUES } from "../components";
+import { Link } from "react-router-dom";
 import { useQuery } from "../db";
+import { css, fmt, LEAGUES } from "../lib/format";
+import { Figure } from "../ui/Figure";
+import { Card, DataTable, PageHead, Tile } from "../ui/kit";
 
-const MODELS = ["closing line", "elo", "dixon-coles blend", "dixon-coles goals", "base rates"];
-const label = (m: string) => (m.length < 24 ? m.replace(/_/g, " ") : m);
+const MODELS = ["closing line", "elo", "dixon-coles blend", "base rates"];
 
 export default function Accuracy() {
   const wf = useQuery(`select * from wf_eval where split like 'test%'`);
@@ -14,24 +16,27 @@ export default function Accuracy() {
   const vaep = useQuery(`select * from vaep_eval where "group" = 'all'`);
   const wp = useQuery(`select * from wp_eval order by minutes`);
   const wpc = useQuery(`select * from wp_calibration order by bucket, mean_p`);
-  const red = useQuery(`select * from wp_red_card order by minute`);
   const rapm = useQuery(`select variant, max(r) r from rapm_eval where split = 'test' group by 1 order by r desc`);
   const mkt = useQuery(`select * from market_eval where scope <> 'all' order by scope`);
-  const relc = useQuery(`select metric, any_value(k90) k90 from reliability_c group by 1 order by k90`);
-  const rela = useQuery(`select * from reliability_a order by k90`);
+  const relc = useQuery(`select metric, any_value(k90) k90 from reliability_c group by 1`);
+  const rela = useQuery(`select * from reliability_a`);
+  const all = Object.fromEntries(wf.rows.filter((r) => r.league === "all").map((r) => [r.model, r]));
+  const eq = Object.fromEntries(bt.rows.filter((r) => r.variant === "equal strength").map((r) => [r.zone, r.brier]));
+  const gbm = xg.rows.find((r) => r.model === "gbm");
 
   const wfPlot = useMemo(() => {
     const rows = wf.rows.filter((r) => MODELS.includes(r.model));
     if (!rows.length) return undefined;
     const leagues = ["all", ...Object.keys(LEAGUES).filter((k) => rows.some((r) => r.league === k))];
     return (width: number) => ({
-      width, height: leagues.length * 28 + 60, marginLeft: 110,
+      width, height: leagues.length * 30 + 70, marginLeft: 112,
       x: { label: "Ranked probability score (lower is better)", grid: true },
       y: { label: null, domain: leagues, tickFormat: (l: string) => (l === "all" ? "All leagues" : LEAGUES[l]) },
-      color: { domain: MODELS, range: [css("--cat-8"), css("--cat-1"), css("--cat-3"), css("--cat-5"), css("--neutral")], legend: true },
+      color: { domain: MODELS, range: [css("--text"), css("--s1"), css("--s3"), css("--muted")], legend: true },
+      symbol: { domain: MODELS, range: ["diamond2", "circle", "circle", "circle"] },
       marks: [
-        Plot.dot(rows, { y: "league", x: "rps", stroke: "model", fill: "model", r: 4.5, symbol: (d: any) => (d.model === "closing line" ? "diamond" : "circle"),
-                         title: (d: any) => `${d.model}, ${d.league}: ${d.rps.toFixed(4)} over ${d.n} matches` }),
+        Plot.dot(rows, { y: "league", x: "rps", stroke: "model", fill: "model", symbol: "model", r: 5 }),
+        Plot.tip(rows, Plot.pointer({ y: "league", x: "rps", title: (d: any) => `${d.model} · ${d.league === "all" ? "all leagues" : LEAGUES[d.league]}\nRPS ${d.rps.toFixed(4)} over ${fmt.n(d.n)} matches` })),
       ],
     });
   }, [wf.rows]);
@@ -39,114 +44,100 @@ export default function Accuracy() {
   const calPlot = useMemo(() => {
     if (!xgc.rows.length) return undefined;
     return (width: number) => ({
-      width, height: 260, x: { label: "Predicted xG per shot", domain: [0, 1] }, y: { label: "Share scored", domain: [0, 1], grid: true },
+      width, height: 260, x: { label: "Predicted xG per shot", domain: [0, 1], tickFormat: "%" }, y: { label: "Share scored", domain: [0, 1], grid: true, tickFormat: "%" },
       marks: [
-        Plot.line([[0, 0], [1, 1]], { stroke: css("--line") }),
-        Plot.line(xgc.rows, { x: "mean_pred", y: "mean_obs", stroke: css("--good") }),
-        Plot.dot(xgc.rows, { x: "mean_pred", y: "mean_obs", r: (d: any) => Math.sqrt(d.n) / 12, fill: css("--good"),
-                             title: (d: any) => `predicted ${fmt.pct(d.mean_pred, 1)}, scored ${fmt.pct(d.mean_obs, 1)} (${d.n} shots)` }),
+        Plot.line([[0, 0], [1, 1]], { stroke: css("--axis") }),
+        Plot.line(xgc.rows, { x: "mean_pred", y: "mean_obs", stroke: css("--s1"), strokeWidth: 2 }),
+        Plot.dot(xgc.rows, { x: "mean_pred", y: "mean_obs", r: (d: any) => 3 + Math.sqrt(d.n) / 15, fill: css("--s1"), stroke: css("--surface"), strokeWidth: 2 }),
+        Plot.tip(xgc.rows, Plot.pointer({ x: "mean_pred", y: "mean_obs", title: (d: any) => `predicted ${fmt.pct(d.mean_pred, 1)}\nscored ${fmt.pct(d.mean_obs, 1)}\n${fmt.n(d.n)} shots` })),
       ],
     });
   }, [xgc.rows]);
 
   const wpPlot = useMemo(() => {
     if (!wpc.rows.length) return undefined;
+    const buckets = [...new Set(wpc.rows.map((r) => r.bucket))];
+    const ramp = [css("--seq-200"), css("--seq-300"), css("--seq-400"), css("--seq-500"), css("--seq-600"), css("--seq-700")];
     return (width: number) => ({
-      width, height: 260, x: { label: "Predicted home-win probability", domain: [0, 1] },
-      y: { label: "Home win rate", domain: [0, 1], grid: true },
-      color: { type: "ordinal" as const, scheme: "blues", legend: true, label: "Minute bucket" },
+      width, height: 260, x: { label: "Predicted home-win probability", domain: [0, 1], tickFormat: "%" },
+      y: { label: "Home win rate", domain: [0, 1], grid: true, tickFormat: "%" },
+      color: { type: "ordinal" as const, domain: buckets, range: ramp.slice(0, buckets.length), legend: true, label: "Minute bucket",
+               tickFormat: (b: number) => `${b * 15}–${b * 15 + 14}'` },
       marks: [
-        Plot.line([[0, 0], [1, 1]], { stroke: css("--line") }),
-        Plot.line(wpc.rows, { x: "mean_p", y: "freq", stroke: "bucket" }),
-        Plot.dot(wpc.rows, { x: "mean_p", y: "freq", fill: "bucket", r: 2.5 }),
+        Plot.line([[0, 0], [1, 1]], { stroke: css("--axis") }),
+        Plot.line(wpc.rows, { x: "mean_p", y: "freq", stroke: "bucket", strokeWidth: 2 }),
+        Plot.tip(wpc.rows, Plot.pointer({ x: "mean_p", y: "freq", title: (d: any) => `${d.bucket * 15}–${d.bucket * 15 + 14}'\npredicted ${fmt.pct(d.mean_p)}, happened ${fmt.pct(d.freq)}\n${fmt.n(d.n)} minutes` })),
       ],
     });
   }, [wpc.rows]);
 
-  const redPlot = useMemo(() => {
-    if (!red.rows.length) return undefined;
-    return (width: number) => ({
-      width, height: 220, x: { label: "Minute of the red card" }, y: { label: "Expected points lost", grid: true },
-      marks: [Plot.areaY(red.rows, { x: "minute", y: "cost_xpts", fill: css("--bad"), fillOpacity: 0.3 }),
-              Plot.line(red.rows, { x: "minute", y: "cost_xpts", stroke: css("--bad"), strokeWidth: 2, tip: true })],
-    });
-  }, [red.rows]);
-
-  const all = Object.fromEntries(wf.rows.filter((r) => r.league === "all").map((r) => [r.model, r]));
-  const eq = Object.fromEntries(bt.rows.filter((r) => r.variant === "equal strength").map((r) => [r.zone, r.brier]));
   return (
     <>
-      <h1>Accuracy</h1>
-      <p className="muted" style={{ maxWidth: 780, marginTop: 0 }}>Everything below is scored out of sample: match forecasts week by week with only
-        data available before kickoff, models fitted on other seasons or other folds. Where we lose, it's shown.</p>
+      <PageHead eyebrow="Accuracy" title={all.elo ? `The closing line beats every model we have, by ${fmt.n(all.elo.rps - all["closing line"].rps, 4)} RPS` : "Accuracy"}
+        lead="Everything here is scored out of sample: match forecasts week by week with only what was known before kickoff, other models on held-out seasons or folds. Losses are shown, not hidden." />
+      <div className="tiles" style={{ marginBottom: 16 }}>
+        <Tile label="Match forecasts (RPS, lower is better)" value={fmt.n(all.elo?.rps, 4)} delta={`closing line ${fmt.n(all["closing line"]?.rps, 4)} · base rates ${fmt.n(all["base rates"]?.rps, 4)}`} />
+        <Tile label="xG model (AUC)" value={fmt.n(gbm?.auc, 3)} delta={`log loss ${fmt.n(gbm?.logloss, 4)}; StatsBomb's own 0.2607`} />
+        <Tile label="Title odds skill vs equal teams" value={eq.title ? fmt.pct(1 - (bt.rows.find((r) => r.variant === "model" && r.zone === "title")?.brier ?? 0) / eq.title) : "–"} delta="Brier skill, simulated from halfway" />
+        <Tile label="Market-value model (R², log)" value={fmt.n(mkt.rows.length ? mkt.rows.reduce((a, r) => a + r.r2_log, 0) / mkt.rows.length : null, 2)} delta="80% intervals hold 80%" />
+      </div>
       <div className="grid">
-        <div className="span-12">
-          {wfPlot && (
-            <Figure title={`The closing line beats every model we have, by ${fmt.n(all["elo"]?.rps - all["closing line"]?.rps, 4)} RPS`}
-                    subtitle={<>Match outcome forecasts, 2021-22 onward ({fmt.n(all["elo"]?.n)} matches), made each week from data before kickoff. Base rates = league-average home/draw/away.
-                      The gap to the market is the information we don't have (injuries, line-ups, news).</>}
-                    source="football-data.co.uk" plot={wfPlot} alt="Forecast error by model and league" />
-          )}
+        <div className="c12">
+          {wfPlot && <Figure title="Match forecasts by league: the market (diamond) leads everywhere"
+            subtitle={<>Ranked probability score of home/draw/away forecasts, 2021-22 onward ({fmt.n(all.elo?.n)} matches), each made the week before from data available then.
+              The gap to the closing line is information we don't have: line-ups, injuries, news. The <Link to="/factors">hidden-factors study</Link> shows which parts of it are measurable.</>}
+            source="football-data.co.uk" plot={wfPlot} alt="Forecast error by model and league"
+            table={{ rows: wf.rows.filter((r) => MODELS.includes(r.model)), cols: [["league", "League"], ["model", "Model"], ["rps", "RPS", (v) => v.toFixed(4)], ["n", "Matches"]] }} />}
         </div>
-        <div className="span-6 card">
-          <p className="figure-title">Season odds: better than chance, far from certain</p>
-          <p className="figure-sub">Each complete season simulated from its halfway point; Brier score vs the same simulator with equal teams, averaged over leagues.</p>
-          <table className="data">
-            <thead><tr><th>Zone</th><th className="r">Model</th><th className="r">Equal strength</th><th className="r">Skill</th></tr></thead>
-            <tbody>{bt.rows.filter((r) => r.variant === "model").map((r) => (
-              <tr key={r.zone}><td>{r.zone.replace("_", " ")}</td><td className="r">{fmt.n(r.brier, 4)}</td><td className="r">{fmt.n(eq[r.zone], 4)}</td>
-                <td className="r">{fmt.pct(1 - r.brier / eq[r.zone])}</td></tr>))}
-            </tbody>
-          </table>
+        <div className="c6">
+          {calPlot && <Figure title="Our xG is well calibrated" subtitle={`Shots grouped by predicted xG, out of fold over ${fmt.n(gbm?.n)} shots.`}
+            source="StatsBomb open data, Wyscout public dataset" plot={calPlot} alt="xG calibration curve"
+            table={{ rows: xgc.rows, cols: [["mean_pred", "Predicted", (v) => fmt.pct(v, 1)], ["mean_obs", "Scored", (v) => fmt.pct(v, 1)], ["n", "Shots"]] }} />}
         </div>
-        <div className="span-6 card">
-          <p className="figure-title">Player impact (RAPM) adds little over its prior</p>
-          <p className="figure-sub">Correlation with next-period on-pitch goal difference (test seasons, best setting per variant).</p>
-          <DataTable rows={rapm.rows} initialSort={{ key: "r", desc: true }} cols={[
-            { key: "variant", label: "Variant" }, { key: "r", label: "r", num: true, fmt: (v) => fmt.n(v, 3) }]} />
+        <div className="c6">
+          {wpPlot && <Figure title="In-game win probability is calibrated at every stage" subtitle="Predicted vs actual home-win rate, by 15-minute phase, on 2021-22 onward."
+            source="football-data.co.uk, Transfermarkt events" plot={wpPlot} alt="Win probability calibration by phase"
+            table={{ rows: wp.rows, cols: [["minutes", "Minutes"], ["logloss_state", "Log loss (game state)", (v) => v.toFixed(3)], ["logloss_prematch", "Pre-match only", (v) => v.toFixed(3)]] }} />}
         </div>
-        <div className="span-6">
-          {calPlot && <Figure title="Our xG is well calibrated" subtitle={<>Shots grouped by predicted xG. Out-of-fold over {fmt.n(xg.rows[0]?.n)} shots;
-            log loss {fmt.n(xg.rows.find((r) => r.model === "gbm")?.logloss, 4)}, AUC {fmt.n(xg.rows.find((r) => r.model === "gbm")?.auc, 3)}.
-            StatsBomb's own xG still does better on its data (0.2607 vs 0.2736 log loss).</>}
-                              source="StatsBomb open data, Wyscout public dataset" plot={calPlot} alt="xG calibration" />}
+        <div className="c6">
+          <Card title="Season odds: better than chance, far from certain" sub="Every complete season simulated from its halfway point and scored against the final table (Brier), vs the same simulator with equal teams.">
+            <DataTable rows={bt.rows.filter((r) => r.variant === "model").map((r) => ({ ...r, eq: eq[r.zone], skill: 1 - r.brier / eq[r.zone] }))} cols={[
+              { key: "zone", label: "Zone", fmt: (v) => v.replace("_", " ") },
+              { key: "brier", label: "Model", num: true, fmt: (v) => v.toFixed(4) },
+              { key: "eq", label: "Equal teams", num: true, fmt: (v) => v?.toFixed(4) },
+              { key: "skill", label: "Skill", num: true, fmt: (v) => fmt.pct(v) },
+            ]} />
+          </Card>
         </div>
-        <div className="span-6 card">
-          <p className="figure-title">Shot and action models</p>
-          <DataTable rows={[...xg.rows.map((r) => ({ m: `xG: ${label(r.model)}`, ...r })), ...vaep.rows.map((r) => ({ m: `VAEP: ${r.label}`, ...r }))]} cols={[
-            { key: "m", label: "Model" }, { key: "n", label: "N", num: true, fmt: (v) => fmt.n(v) },
-            { key: "logloss", label: "Log loss", num: true, fmt: (v) => fmt.n(v, 4) },
-            { key: "logloss_base", label: "Baseline", num: true, fmt: (v) => fmt.n(v, 4) },
-            { key: "auc", label: "AUC", num: true, fmt: (v) => fmt.n(v, 3) }]} />
-          <p className="small muted">VAEP: probability that the possessing team scores (or concedes) within the next 10 actions; baseline = constant rate.</p>
+        <div className="c6">
+          <Card title="Shot and action models" sub="Out of sample. VAEP: chance the possessing team scores (or concedes) in the next 10 actions; baseline = a constant rate.">
+            <DataTable rows={[...xg.rows.map((r) => ({ m: `xG · ${r.model}`, ...r })), ...vaep.rows.map((r) => ({ m: `VAEP · ${r.label}`, ...r }))]} cols={[
+              { key: "m", label: "Model" }, { key: "n", label: "N", num: true, fmt: (v) => fmt.compact(v) },
+              { key: "logloss", label: "Log loss", num: true, fmt: (v) => v.toFixed(4) },
+              { key: "logloss_base", label: "Baseline", num: true, fmt: (v) => v == null ? "–" : v.toFixed(4) },
+              { key: "auc", label: "AUC", num: true, fmt: (v) => v?.toFixed(3) },
+            ]} />
+          </Card>
         </div>
-        <div className="span-6">
-          {wpPlot && <Figure title="In-game win probability is calibrated at every stage" subtitle="Predicted vs actual home-win rate by match phase."
-                             source="football-data.co.uk, Transfermarkt events" plot={wpPlot} alt="Win probability calibration" />}
+        <div className="c4">
+          <Card title="Player impact (RAPM) barely beats its prior" sub="Correlation with next-period on-pitch goal difference, test seasons, best setting per variant.">
+            <DataTable rows={rapm.rows} cols={[{ key: "variant", label: "Variant" }, { key: "r", label: "r", num: true, fmt: (v) => v.toFixed(3) }]} />
+          </Card>
         </div>
-        <div className="span-6 card">
-          <p className="figure-title">The game state beats the pre-match odds from the first minute</p>
-          <DataTable rows={wp.rows} cols={[
-            { key: "minutes", label: "Minutes" }, { key: "n", label: "N", num: true, fmt: (v) => fmt.n(v) },
-            { key: "logloss_state", label: "Log loss (state)", num: true, fmt: (v) => fmt.n(v, 3) },
-            { key: "logloss_prematch", label: "Pre-match only", num: true, fmt: (v) => fmt.n(v, 3) }]} />
-          {redPlot && <Figure title="What a red card costs" subtitle="Expected points lost by the home side going down to ten men, by minute." source="model" plot={redPlot} alt="Red card cost by minute" />}
+        <div className="c4">
+          <Card title="Market-value model by season">
+            <DataTable rows={mkt.rows} maxHeight={320} cols={[
+              { key: "scope", label: "Season" }, { key: "r2_log", label: "R²", num: true, fmt: (v) => v.toFixed(2) },
+              { key: "median_abs_pct_error", label: "Typical miss", num: true, fmt: (v) => fmt.pct(v) },
+              { key: "inside_80", label: "In 80% band", num: true, fmt: (v) => fmt.pct(v) }]} />
+          </Card>
         </div>
-        <div className="span-6 card">
-          <p className="figure-title">Market-value model, by season</p>
-          <DataTable rows={mkt.rows} cols={[
-            { key: "scope", label: "Season" }, { key: "n", label: "Players", num: true },
-            { key: "r2_log", label: "R² (log)", num: true, fmt: (v) => fmt.n(v, 2) },
-            { key: "median_abs_pct_error", label: "Typical miss", num: true, fmt: (v) => fmt.pct(v) },
-            { key: "inside_80", label: "Inside 80% band", num: true, fmt: (v) => fmt.pct(v) }]} />
-        </div>
-        <div className="span-6 card">
-          <p className="figure-title">How many minutes until a stat means something</p>
-          <p className="figure-sub">90s needed for a per-90 stat to be half signal, half noise (split-half reliability). Lower = stabilises faster. Ratings shrink toward average accordingly.</p>
-          <DataTable rows={[...relc.rows.map((r) => ({ ...r, src: "box score" })), ...rela.rows.map((r) => ({ ...r, src: "event data" }))]}
-                     initialSort={{ key: "k90", desc: false }} cols={[
-            { key: "metric", label: "Metric" }, { key: "src", label: "Source" },
-            { key: "k90", label: "90s to 50%", num: true, fmt: (v) => fmt.n(v, 1) }]} />
+        <div className="c4">
+          <Card title="How many 90s until a stat means something" sub="90s needed for a per-90 stat to be half signal (split-half reliability). Ratings shrink accordingly.">
+            <DataTable rows={[...relc.rows.map((r) => ({ ...r, src: "box score" })), ...rela.rows.map((r) => ({ ...r, src: "event" }))]} initialSort={{ key: "k90", desc: false }} maxHeight={320} cols={[
+              { key: "metric", label: "Metric", fmt: (v) => v.replace(/_p90$/, "").replace(/_/g, " ") }, { key: "src", label: "Source" },
+              { key: "k90", label: "90s", num: true, fmt: (v) => v.toFixed(1) }]} />
+          </Card>
         </div>
       </div>
     </>
