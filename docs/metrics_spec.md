@@ -829,6 +829,61 @@ totals; both teams to score.
 
 The gap to the closing line is reported as is.
 
+*Change, Nov 15 (Phase 1, team models and walk-forward built):*
+
+**Data**
+
+- `core.team_matches` holds 48,543 league matches (8 European leagues plus MLS,
+  2012-13 → 8 Nov 2026), all with canonical clubs.
+- Played and official scores are kept apart.
+- Kickoffs are converted from football-data.co.uk's UK time to UTC from 2019-20, and
+  stored as plain UTC timestamps (a time-zone-aware type would have needed a new
+  dependency).
+- The closing line follows D15 and is present for ≥ 99.8% of matches.
+
+**Proxy xG** (Poisson on shots on target and off target, earlier seasons only) **is weak.**
+Against the real team xG available for 2026-27, it correlates 0.43-0.75 per team-match and
+0.62 for the xG difference.
+
+**Walk-forward, every match predicted weekly from earlier matches only**
+
+- 31,997 matches, 2017-18 → 2026-27.
+- Half-life (90 / 180 / 365 days) and the goals/xG blend were tuned on 2017-18 to 2020-21
+  (chosen: 365 days, 75% goals).
+- A test checks that changing a later result can't move an earlier prediction.
+
+**Test seasons, 2021-22 onward, 18,668 matches** (all models scored on the same matches):
+
+| Model | RPS | Log loss |
+|---|---|---|
+| Base rates | 0.2294 | 1.072 |
+| Dixon-Coles, proxy xG | 0.2091 | 1.014 |
+| Dixon-Coles, goals | 0.2052 | 1.001 |
+| Dixon-Coles, blend | 0.2050 | 1.001 |
+| **Elo** | **0.2047** | **1.000** |
+| **Closing line** | **0.1983** | **0.979** |
+
+**Conclusions**
+
+- **We trail the market by ≈ 0.0065 RPS** in every league. The gap is smallest in the
+  Championship (0.0054) and largest in the PL, Eredivisie and Primeira (≈ 0.0070).
+- The proxy-xG blend is worth ≈ 0.0002 RPS. **Proxy xG on its own is worse than goals.**
+- **Elo matches Dixon-Coles.** On these inputs, neither has an edge.
+- **Promoted clubs** are pulled toward last season's relegated clubs all season
+  (`walkforward.fit_league`). The change was measured and moved test RPS by < 0.0001.
+- The rest/congestion, travel and manager adjustments of the spec are still to be tested
+  (Phase 2 ablations). Lineup adjustments are historical-only per D18.
+
+**Team ratings** (`ratings.team_season`)
+
+- Three systems per league-season, at season end and as of the latest data.
+- Dixon-Coles and the market agree closely (r 0.85-0.97 by league).
+- Disagreements are informative:
+  - **Leicester 2015-16 at season end:** Elo 1st, Dixon-Coles +0.64 goals per match, the
+    market +0.04.
+  - **Promoted Hull, 2026-27 so far** (P10, goal difference 0): Dixon-Coles ≈ 0, the market
+    −0.68.
+
 ### 6.6 Win probability by game state
 
 - Multinomial model of the final result given (minute, goal difference, red-card

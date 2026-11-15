@@ -225,6 +225,33 @@ VAEP_CHECKS = [
 ]  # fmt: skip
 
 
+TEAM_CHECKS = [
+    Check("team matches: both clubs canonical (share)", """
+        select competition_id scope,
+               avg((home_club is not null and away_club is not null)::int) value
+        from core.team_matches group by 1""", 1.0),
+    Check("team matches: closing line present, 2012-13 to 2025-26 (share)", """
+        select competition_id scope, avg((close_home is not null)::int) value
+        from core.team_matches where season between 2012 and 2025 group by 1""", 0.99),
+    Check("walk-forward: every model beats base rates on the test seasons (RPS gain)", """
+        select m.model scope, b.rps - m.rps value
+        from forecast.wf_eval m join forecast.wf_eval b
+          on b.split = m.split and b.league = m.league and b.model = 'base rates'
+        where m.league = 'all' and m.split like 'test%' and m.model <> 'base rates'""",
+          0.0),
+    Check("walk-forward: closing line vs our best model, test RPS gap (info)", """
+        select 'all' scope,
+               (select min(rps) from forecast.wf_eval where league = 'all'
+                and split like 'test%' and model not in ('closing line', 'base rates'))
+               - (select rps from forecast.wf_eval where league = 'all'
+                  and split like 'test%' and model = 'closing line') value""", 0.0,
+          higher_is_better=False, blocking=False),
+    Check("team ratings: three systems agree (Dixon-Coles vs market r, worst league)", """
+        select competition_id scope, corr(dc_gd, mkt_gd) value from ratings.team_season
+        group by 1""", 0.8),
+]  # fmt: skip
+
+
 def event_checks(prefix: str, provider: str) -> list[Check]:
     issues = (OVERRIDES / "event_known_issues.csv").as_posix()
     return [
@@ -258,6 +285,8 @@ def run(con, checks: list[Check] | None = None) -> pd.DataFrame:
             checks += XT_CHECKS
         if has_table(con, "metrics", "vaep_eval"):
             checks += VAEP_CHECKS
+        if has_table(con, "forecast", "wf_eval") and has_table(con, "ratings", "team_season"):
+            checks += TEAM_CHECKS
     rows = []
     for c in checks:
         df = con.execute(c.sql).df()

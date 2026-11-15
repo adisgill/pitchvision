@@ -63,7 +63,7 @@ def matches(paths: Paths) -> tuple[pd.DataFrame, pd.DataFrame]:
             h, a = sides["home"], sides["away"]
             ref = next((r["refereeId"] for r in m["referees"] if r["role"] == "referee"), None)
             rows.append({"match_id": m["wyId"], "competition_id": comp, "season": SEASON,
-                         "kickoff_utc": pd.Timestamp(m["dateutc"], tz="UTC"),
+                         "kickoff_utc": pd.Timestamp(m["dateutc"]),  # already UTC
                          "gameweek": m["gameweek"], "home_team_id": h["teamId"],
                          "away_team_id": a["teamId"], "home_goals": h["score"],
                          "away_goals": a["score"], "home_goals_ht": h["scoreHT"],

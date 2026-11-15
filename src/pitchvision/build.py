@@ -64,6 +64,19 @@ def run(strict: bool = True) -> dict:
                 from pitchvision.core import crosswalk
 
                 out["crosswalk"] = crosswalk.build(con, paths)
+        if has_table(con, "stg", "fd_matches") and has_table(con, "core", "crosswalk"):
+            with stage("core: team matches"):
+                from pitchvision.core import team_matches
+
+                out["team_matches"] = team_matches.build(con, paths)
+            with stage("forecast: walk-forward (team models vs the closing line)"):
+                from pitchvision.forecast import walkforward
+
+                out["walkforward"] = walkforward.build(con, paths)
+            with stage("ratings: teams (Dixon-Coles, Elo, market)"):
+                from pitchvision.ratings import team
+
+                out["team_ratings"] = team.build(con, paths)
         if has_table(con, "metrics", "shots"):
             with stage("models: expected threat"):
                 from pitchvision.models import xt

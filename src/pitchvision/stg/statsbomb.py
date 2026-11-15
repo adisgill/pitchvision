@@ -254,7 +254,8 @@ def _stage_season(args: tuple) -> tuple[list[dict], list[dict], int]:
             "sb_season_id": season, "season": int(m["season"]["season_name"][:4]),
             "season_label": m["season"]["season_name"].replace("/20", "-"),
             "match_date": local.date(), "kickoff_local": local,
-            "kickoff_utc": local.tz_localize(tz).tz_convert("UTC") if tz else pd.NaT,
+            "kickoff_utc": (local.tz_localize(tz).tz_convert("UTC").tz_localize(None)
+                            if tz else pd.NaT),  # naive UTC
             "home_team_id": m["home_team"]["home_team_id"],
             "home_team_name": m["home_team"]["home_team_name"],
             "away_team_id": m["away_team"]["away_team_id"],
