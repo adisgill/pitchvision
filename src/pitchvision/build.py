@@ -7,7 +7,7 @@ import logging
 
 from pitchvision import quality
 from pitchvision.config import get_paths
-from pitchvision.db import connect, stage
+from pitchvision.db import connect, has_table, stage
 
 log = logging.getLogger(__name__)
 
@@ -29,11 +29,31 @@ def run(strict: bool = True) -> dict:
                 from pitchvision.metrics import stints
 
                 out["stints"] = stints.build(con, paths)
+            with stage("metrics + ratings: tier C players"):
+                from pitchvision.metrics import players
+
+                out["players"] = players.build(con, paths)
         if (paths.source("wyscout") / "events" / "events.zip").exists():
             with stage("stg: wyscout"):
                 from pitchvision.stg import wyscout
 
                 out["wyscout"] = wyscout.build(con, paths)
+        if any(paths.source("statsbomb").glob("*/matches")):
+            with stage("stg: statsbomb"):
+                from pitchvision.stg import statsbomb
+
+                out["statsbomb"] = statsbomb.build(con, paths)
+        with stage("stg: unified actions view"):
+            parts = [f"select * from stg.{p}_actions" for p in ("wy", "sb")
+                     if has_table(con, "stg", f"{p}_actions")]  # fmt: skip
+            if parts:
+                con.execute("create or replace view stg.actions as "
+                            + " union all by name ".join(parts))  # fmt: skip
+        if has_table(con, "stg", "tm_games"):
+            with stage("core: crosswalk"):
+                from pitchvision.core import crosswalk
+
+                out["crosswalk"] = crosswalk.build(con, paths)
         with stage("qa: data-quality checks"):
             qa = quality.run(con)
             con.execute("create schema if not exists qa")

@@ -107,6 +107,51 @@ _IN_FRAME = """
     from stg.{p}_actions where start_x is not null"""
 
 
+CROSSWALK_CHECKS = [
+    Check("crosswalk: men's event matches mapped to a TM match (share)", """
+        select source scope, avg((canonical_id like 'tm-%')::int) value from core.crosswalk
+        where entity = 'match' and method <> 'own' group by 1""", 0.995),
+    Check("crosswalk: men's event players mapped to TM (share of players)", """
+        select source scope, avg((canonical_id like 'tm-%')::int) value from core.crosswalk
+        where entity = 'player' and method <> 'own' group by 1""", 0.98),
+    Check("crosswalk: ambiguous rows (share of all rows)", """
+        select 'all' scope, (select count(*) from core.crosswalk_qa
+                             where reason = 'ambiguous votes')
+                            / (select count(*) from core.crosswalk) value""", 0.005,
+          higher_is_better=False),
+]  # fmt: skip
+
+
+_SCALE = """
+    with s as (select competition_id, season, position_group, {col} x, minutes w
+               from ratings.player_season_c where qualified and {col} is not null),
+    m as (select competition_id, season, position_group, sum(x * w) / sum(w) mu, count(*) n
+          from s group by all),
+    d as (select m.competition_id, m.season, m.position_group, m.mu,
+                 sqrt(sum(s.w * power(s.x - m.mu, 2)) / sum(s.w)) sd
+          from s join m using (competition_id, season, position_group)
+          where m.n >= 10
+          group by m.competition_id, m.season, m.position_group, m.mu)
+    select '{col}' scope, max(greatest(abs(mu - 50) / 0.5, abs(sd - 10) / 0.5)) value
+    from d"""
+
+# spec 3.1 acceptance: per (league-season, group), minute-weighted mean 50 +- 0.5 and SD
+# 10 +- 0.5 over qualified players, on the unclipped scale (value = worst deviation in
+# units of the tolerance); the share clipped to 0 or 100 is reported, not blocking
+_DIMS = ("scoring", "creation", "availability", "discipline")
+RATING_CHECKS = [
+    Check(f"ratings: tier-C mean 50 / SD 10 per league-season-group ({d})",
+          _SCALE.format(col=f"{d}_score"), 1.0, higher_is_better=False)
+    for d in _DIMS
+] + [
+    Check(f"ratings: tier-C share clipped at 0 or 100 ({d}, info)", f"""
+        select '{d}' scope, avg(({d}_score < 0 or {d}_score > 100)::int) value
+        from ratings.player_season_c where {d}_score is not null""", 0.01,
+          higher_is_better=False, blocking=False)
+    for d in _DIMS
+]  # fmt: skip
+
+
 def event_checks(prefix: str, provider: str) -> list[Check]:
     issues = (OVERRIDES / "event_known_issues.csv").as_posix()
     return [
@@ -126,6 +171,12 @@ def run(con, checks: list[Check] | None = None) -> pd.DataFrame:
             checks += STINT_CHECKS
         if has_table(con, "stg", "wy_actions"):
             checks += event_checks("wy", "wyscout")
+        if has_table(con, "stg", "sb_actions"):
+            checks += event_checks("sb", "statsbomb")
+        if has_table(con, "core", "crosswalk"):
+            checks += CROSSWALK_CHECKS
+        if has_table(con, "ratings", "player_season_c"):
+            checks += RATING_CHECKS
     rows = []
     for c in checks:
         df = con.execute(c.sql).df()

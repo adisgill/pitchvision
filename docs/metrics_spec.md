@@ -216,6 +216,18 @@ For metric `m`, player `i`, league-season `s`, position group `g`:
 - **Acceptance:** per (s, g), the minute-weighted mean of ratings over qualified players is
   50 ± 0.5 and the SD is 10 ± 0.5. Tested.
 
+*Change, Nov 14 (Phase 1, tier-C ratings):*
+
+- **The acceptance test checks the unclipped scale.** It is run on the unclipped
+  `50 + 10·z` (stored as `<dim>_score` next to the clipped `<dim>_rating`), because
+  clipping at 0 and 100 necessarily moves the mean and SD in skewed groups.
+  - The share clipped is reported: 0.03-0.10% per tier-C dimension.
+  - Result: mean and SD are exact (to 1e-13) in every league-season-group with ≥ 10
+    qualified players.
+- **No scoring or creation ratings for goalkeepers.** They aren't goalkeeper dimensions,
+  and goalkeepers' near-all-zero goals and assists made the scale meaningless.
+- **Metrics with no spread are blank, not 50.**
+
 ### 3.2 Shrinkage (empirical Bayes, per metric)
 
 `m̃ = (n · m + k · μ_prior) / (n + k)`
@@ -237,6 +249,23 @@ For metric `m`, player `i`, league-season `s`, position group `g`:
   across seasons of the same tier.
 
 `D_i` is then mapped with 3.1. The weights table is published.
+
+*Change, Nov 14 (Phase 1, tier-C ratings):*
+
+- **Weights are provisional.** Tier-C dimension weights are equal until Phase 2 measures
+  each component's out-of-sample validity `v_c`. Only Availability has more than one
+  component (minutes share and starts share).
+- **First reliability results**, split-half, pooled across positions, 2012-13 → 2025-26
+  in the domestic leagues:
+
+  | Metric | `k` (90s at which r = 0.5) | Minutes |
+  |---|---|---|
+  | Non-penalty goals per 90 | 7.2 | ≈ 650 |
+  | Assists per 90 | 14.5 | ≈ 1,300 |
+  | Cards per 90 | 29 | ≈ 2,600 |
+
+- Pooling across positions inflates r (between-position differences count as "skill"),
+  so Phase 2 re-estimates `k` within position group.
 
 ---
 
