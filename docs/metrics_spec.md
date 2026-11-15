@@ -678,6 +678,35 @@ rating, never instead of it.
 - Fitted per provider and pooled; the difference is reported.
 - **xT added** = xT(end) − xT(start) for successful moves.
 
+*Change, Nov 14 (Phase 1, xT built):*
+
+- **Fit.** 6,224,195 open-play passes, crosses and carries and 111,011 open-play shots,
+  using our xG as G. Value iteration converges in 38-52 iterations.
+- **Surface.** It runs from ≈ 0.003 deep in a team's own half to 0.34 in the central
+  cells on the six-yard line.
+- **Subsets.** The surfaces fitted on StatsBomb men's, Wyscout men's and StatsBomb women's
+  data correlate 0.997-0.9997 with the pooled one, so **actions are credited with the
+  pooled surface**.
+  - Wyscout's surface peaks higher (0.44 against 0.31) because its moves have no carries.
+- **Take-ons are not moves.** They have no end location in either provider.
+- **Mean xT added per successful action:** crosses 0.096, passes 0.0018, carries 0.0011.
+  xT rewards completed crosses into the box heavily (a known property of the model), so
+  wide crossers rank high on total xT. The split by action type is always shown.
+- **Known-answer check.** The top xT per 90 (≥ 900 minutes) is Neymar and Messi in La Liga
+  2015-16, Özil and Alexis Sánchez in the PL 2015-16, and Fàbregas and De Bruyne in the
+  PL 2017-18 (passes and crosses only, since Wyscout has no carries).
+
+*Change, Nov 14 (Phase 1, tier-A minutes):*
+
+- **StatsBomb minutes are real on-pitch time**: the union of each player's lineup spells
+  on a linear match timeline. Some extra-time matches have spells that overlap or run
+  backwards; overlaps count once and backward spells are dropped.
+- **Result:** team-match minutes average exactly 11 × real match length, and 98.9% of
+  team-matches are within 2%.
+- **Wyscout minutes are nominal** (0-90 from starts and substitutions). Its red cards are
+  foul-event tags that staging doesn't keep, so a sent-off player is counted to 90; this
+  is a known limitation, to fix in Phase 2.
+
 ### 6.3 VAEP-style action values
 
 - **Schema:** a unified action table (SPADL-like, own implementation) from SB and WY:

@@ -64,6 +64,16 @@ def run(strict: bool = True) -> dict:
                 from pitchvision.core import crosswalk
 
                 out["crosswalk"] = crosswalk.build(con, paths)
+        if has_table(con, "metrics", "shots"):
+            with stage("models: expected threat"):
+                from pitchvision.models import xt
+
+                out["xt"] = xt.build(con, paths)
+            with stage("metrics: tier-A minutes and player-seasons"):
+                from pitchvision.metrics import minutes_a, players_a
+
+                out["minutes_a"] = minutes_a.build(con, paths)
+                out["players_a"] = players_a.build(con, paths)
         with stage("qa: data-quality checks"):
             qa = quality.run(con)
             con.execute("create schema if not exists qa")

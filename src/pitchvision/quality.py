@@ -185,6 +185,30 @@ XG_CHECKS = [
 ]  # fmt: skip
 
 
+XT_CHECKS = [
+    Check("xt: value iteration converged (iterations, max over subsets)", """
+        select 'all' scope, max(iterations) value from metrics.xt_fit""", 499,
+          higher_is_better=False),
+    Check("xt: surface values in [0, 1] and highest in front of goal", """
+        select 'pooled' scope,
+               (min(xt) >= 0 and max(xt) <= 1
+                and arg_max(cx, xt) = 15 and arg_max(cy, xt) in (5, 6))::int value
+        from metrics.xt_grid where subset = 'pooled'""", 1),
+    Check("minutes: StatsBomb team-match minutes within 2% of 11 x real length (share)", """
+        with len as (select match_id, sum(mx) / 60 l
+                     from (select match_id, period, max(time_s) mx from stg.sb_actions
+                           where period between 1 and 4 group by all) group by 1),
+        t as (select match_id, team_id, sum(minutes) m from metrics.player_minutes_a
+              where provider = 'statsbomb' group by all)
+        select 'statsbomb' scope, avg((abs(m / (11 * l) - 1) <= 0.02)::int) value
+        from t join len using (match_id)""", 0.98),
+    Check("minutes: Wyscout team-match minutes within 30 of 990 (share)", """
+        select 'wyscout' scope, avg((abs(m - 990) <= 30)::int) value
+        from (select match_id, team_id, sum(minutes) m from metrics.player_minutes_a
+              where provider = 'wyscout' group by all)""", 0.99),
+]  # fmt: skip
+
+
 def event_checks(prefix: str, provider: str) -> list[Check]:
     issues = (OVERRIDES / "event_known_issues.csv").as_posix()
     return [
@@ -214,6 +238,8 @@ def run(con, checks: list[Check] | None = None) -> pd.DataFrame:
             checks += RATING_CHECKS
         if has_table(con, "metrics", "shots"):
             checks += XG_CHECKS
+        if has_table(con, "metrics", "xt_fit") and has_table(con, "metrics", "player_minutes_a"):
+            checks += XT_CHECKS
     rows = []
     for c in checks:
         df = con.execute(c.sql).df()
