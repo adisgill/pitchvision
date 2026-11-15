@@ -335,6 +335,13 @@ TIER_A_CHECKS = [
     for d in ("finishing", "creation", "progression", "ball_security", "defending",
               "duels", "shot_stopping", "distribution")
 ] + [
+    Check("roles: rated player-seasons with a role (share)", """
+        select 'all' scope, (select count(*) from ratings.roles)
+               / (select count(*) from metrics.player_season_a where minutes >= 450
+                  and position_group is not null) value""", 0.95),
+    Check("similar players: never the same player (count)", """
+        select 'all' scope, count(*) value from ratings.similar_players
+        where player_id = similar_player_id""", 0, higher_is_better=False),
     Check("tier A: share of non-penalty xG assisted by a completed pass, per provider", """
         select provider scope, sum(xa) / sum(npxg) value from metrics.player_season_a
         group by 1""", 0.5),
@@ -382,7 +389,7 @@ def run(con, checks: list[Check] | None = None) -> pd.DataFrame:
             checks += SIM_CHECKS
         if has_table(con, "ratings", "market_value_eval"):
             checks += CAREER_CHECKS
-        if has_table(con, "ratings", "player_season_a"):
+        if has_table(con, "ratings", "player_season_a") and has_table(con, "ratings", "roles"):
             checks += TIER_A_CHECKS
     rows = []
     for c in checks:

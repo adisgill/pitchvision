@@ -560,7 +560,45 @@ provider-competition-position groups; the 90s at which r = 0.5):
 - The UI shows the role and its posterior probability.
 - **Tier C role** = position group only.
 
+*Change, Nov 15 (Phase 1, roles built):* `ratings/roles.py`.
+
+**Method**
+
+- **Features:** the share of on-ball actions in 6 length × 3 width bands (left and right
+  folded), the action mix and volume rates.
+- **Fitted per provider and position group** (features differ: no carries or pressures on
+  Wyscout), 2-4 diagonal-covariance mixture components by BIC.
+- **Names:** templates scored against each centroid. Clusters with the same name are split
+  "deep" / "advanced" by where their actions sit. The centroid's highest and lowest traits
+  are stored in `ratings.role_clusters` to audit each name.
+
+**Results**
+
+- 5,603 player-seasons (99%) have a role.
+- **Known-answer check:**
+  - Messi: inside forward;
+  - Mascherano and Piqué: ball-playing CB;
+  - Giroud: target forward;
+  - Busquets and Kroos: deep-lying playmaker;
+  - Casemiro: ball-winning midfielder.
+
+**Limits**
+
+- **Kanté (Wyscout 2017-18) lands in "playmaker"**: without pressure data, his passing
+  volume dominates.
+- **Posterior probabilities are overconfident** (mean 0.97) because of the diagonal
+  mixture. Treat them as an ordering, not a calibrated probability.
+- Roles exist only for tier-A seasons.
+
 ### 5.4 Similarity
+
+*Change, Nov 15 (Phase 1, built):*
+
+- **Within provider and position group, across seasons.** Other seasons of the same player
+  are excluded.
+- Top 10 per player-season, 56,470 rows.
+- **Known-answer check:** Messi 2015-16's nearest are Alexis Sánchez, Coutinho, Neymar,
+  Mertens and Hazard.
 
 - **Tier A:** cosine similarity in the standardised role-feature plus dimension space,
   within position group, across seasons and providers after provider harmonisation.
