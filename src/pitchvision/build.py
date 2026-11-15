@@ -105,6 +105,10 @@ def run(strict: bool = True) -> dict:
 
                 out["minutes_a"] = minutes_a.build(con, paths)
                 out["players_a"] = players_a.build(con, paths)
+            with stage("ratings: tier A (event seasons)"):
+                from pitchvision.ratings import players_a as ratings_a
+
+                out["ratings_a"] = ratings_a.build(con, paths)
         with stage("qa: data-quality checks"):
             qa = quality.run(con)
             con.execute("create schema if not exists qa")

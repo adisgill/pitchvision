@@ -315,6 +315,32 @@ CAREER_CHECKS = [
 ]  # fmt: skip
 
 
+_SCALE_A = """
+    with s as (select provider, competition_id, season, position_group, {col} x, minutes w
+               from ratings.player_season_a where qualified and {col} is not null),
+    m as (select provider, competition_id, season, position_group, sum(x * w) / sum(w) mu,
+                 count(*) n
+          from s group by all),
+    d as (select m.provider, m.competition_id, m.season, m.position_group, m.mu,
+                 sqrt(sum(s.w * power(s.x - m.mu, 2)) / sum(s.w)) sd
+          from s join m using (provider, competition_id, season, position_group)
+          where m.n >= 10
+          group by m.provider, m.competition_id, m.season, m.position_group, m.mu)
+    select '{col}' scope, max(greatest(abs(mu - 50) / 0.5, abs(sd - 10) / 0.5)) value
+    from d"""
+
+TIER_A_CHECKS = [
+    Check(f"ratings: tier-A mean 50 / SD 10 per league-season-group ({d})",
+          _SCALE_A.format(col=f"{d}_score"), 1.0, higher_is_better=False)
+    for d in ("finishing", "creation", "progression", "ball_security", "defending",
+              "duels", "shot_stopping", "distribution")
+] + [
+    Check("tier A: share of non-penalty xG assisted by a completed pass, per provider", """
+        select provider scope, sum(xa) / sum(npxg) value from metrics.player_season_a
+        group by 1""", 0.5),
+]  # fmt: skip
+
+
 def event_checks(prefix: str, provider: str) -> list[Check]:
     issues = (OVERRIDES / "event_known_issues.csv").as_posix()
     return [
@@ -356,6 +382,8 @@ def run(con, checks: list[Check] | None = None) -> pd.DataFrame:
             checks += SIM_CHECKS
         if has_table(con, "ratings", "market_value_eval"):
             checks += CAREER_CHECKS
+        if has_table(con, "ratings", "player_season_a"):
+            checks += TIER_A_CHECKS
     rows = []
     for c in checks:
         df = con.execute(c.sql).df()

@@ -483,6 +483,73 @@ Every rating stores `tier`, `minutes`, `league_season`, `group`.
 | Discipline | cards /90 (inverted) |
 | Impact | goal-RAPM with prior (5.5) |
 
+*Change, Nov 15 (Phase 1, tier-A catalog and ratings built):* `metrics/players_a.py`,
+`ratings/players_a.py`.
+
+**Coverage**
+
+- 133,224 player-matches and 7,600 player-seasons, carrying the catalog of 4.1-4.8.
+- **Not built yet:** xGOT / PSxG and xPass (6.4); pass completion is raw for now.
+- **xGChain / xGBuildup** wait for possession sequences on Wyscout.
+- StatsBomb-only metrics are blank for Wyscout seasons: carries, recoveries, blocks,
+  pressures, dribbled-past, fouls won, sweeper actions.
+
+**Definitions**
+
+- **xA links each non-penalty shot** to the shooting team's last completed pass within
+  6 s with no opponent ball action between.
+- The share of non-penalty xG assisted this way is 73% (StatsBomb) and 63% (Wyscout).
+- **Raw counts aren't comparable across providers.** Wyscout records a pass's end where the
+  receiver next played the ball, so it shows more progressive passes (6.6 vs 4.0 per 90)
+  and logs every defending duel as a tackle. Ratings are always within league-season, so
+  this doesn't leak into them.
+
+**Position groups**
+
+- Each player's group is the one with the most minutes over the season. A first version
+  took the longest single match's position, a bug caught in the spot checks.
+- StatsBomb slots are used as given: a right-back who played right centre-back in a back
+  three is a CB in those matches (for example Simon Francis 2015-16). Roles (5.3) will
+  separate wide centre-backs.
+- **Wyscout's location rule finds few DMs** (71). Role clustering will refine this.
+
+**Reliability, within position group** (split-half, weighted median across 33-54
+provider-competition-position groups; the 90s at which r = 0.5):
+
+| Metric | k (90s) |
+|---|---|
+| Progressive carries | 2.4 |
+| Progressive passes | 2.9 |
+| Pressures | 2.9 |
+| Final-third entries | 3.5 |
+| xT | 4.7 |
+| Box entries | 5.1 |
+| Turnovers | 5.4 |
+| Tackles + interceptions (possession-adjusted) | 6.2 |
+| npxG | 9.4 |
+| Key passes | 9.9 |
+| xA | 11.0 |
+| Through balls | 14.0 |
+| **Finishing (goals − xG)** | **54** (≈ 4,900 minutes) |
+| **Goalkeeper goals prevented** | **57** (≈ 5,100 minutes) |
+| **Defensive VAEP** | **64** (≈ 5,800 minutes) |
+
+- **Pooled across positions, the volume metrics looked near-perfectly reliable** (r ≈ 0.9
+  after four matches): role, not skill. Hence the within-group estimate.
+- **Finishing, goalkeeper shot-stopping and defensive VAEP are mostly noise over a
+  season.** They're shrunk accordingly; this is the first evidence for H1 and H2.
+- **Success rates** are shrunk with a fixed 30-attempt prior until Phase 2 measures them.
+- **Dimension weights** are equal (provisional, D10).
+
+**Results and checks**
+
+- 5,639 rated player-seasons. Mean 50 and SD 10 are exact per league-season-group for
+  every dimension.
+- **Known-answer check:**
+  - PL 2015-16 creation: Fàbregas, Cazorla, Firmino, Özil in the top five;
+  - La Liga 2015-16 progression: Mascherano, Marcelo, Banega, Messi, Dani Alves;
+  - PL 2017-18 defending among centre-backs: Koscielny, Maguire, Vertonghen.
+
 ### 5.3 Roles (tier A)
 
 - **Features:** per-90 action shares by 6 × 4 pitch zones and action type (touches,
