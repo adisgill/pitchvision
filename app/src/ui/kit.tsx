@@ -302,7 +302,10 @@ export function EntityPicker({ kind, onPick, placeholder, value, filterSql }: {
   const parts: string[] = [];
   if (kind !== "player") parts.push(`select 'team' kind, club_id id, name, league sub, 0 o from clubs where name ilike ${like} and league is not null`);
   if (kind !== "team") parts.push(`select 'player' kind, p.player_id id, p.name, coalesce(p.position, '') sub, 1 o from players p
-    where p.name ilike ${like} and p.player_id in (select player_id from players_c union select player_id from players_a) ${filterSql ?? ""}`);
+    where p.name ilike ${like} and p.player_id in (select player_id from players_c union select player_id from players_a
+      union select player_id from fm_player_season) ${filterSql ?? ""}`);
+  // players only FotMob knows (joined after the Transfermarkt freeze)
+  if (kind !== "team" && !filterSql) parts.push(`select 'player' kind, f.player_id id, f.name, coalesce(f.country, '') sub, 1 o from fm_players f where f.name ilike ${like}`);
   const res = useQuery(open && term.length >= 2 ? `select * from (${parts.join(" union all ")}) order by o, length(name) limit 20` : null);
   const pick = (r: Row) => { onPick({ kind: r.kind, id: r.id, name: r.name, sub: r.sub }); setQ(r.name); setOpen(false); };
   return (

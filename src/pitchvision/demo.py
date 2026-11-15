@@ -220,11 +220,21 @@ TABLES: dict[str, str] = {
     "fixtures": """select * exclude (home_name, away_name), home_name, away_name
                    from metrics.fm_fixtures""",
     "fm_events": """select x.match_id, e.type, e.minute, e.minute_added, e.is_home,
-                           coalesce(p.player_id, 'fm-' || e.player_fm_id) player_id,
+                           coalesce(p.player_id, 'fm-' || e.player_fm_id::bigint) player_id,
                            e.player_name, e.card, e.own_goal, e.penalty, e.sub_in, e.sub_out
                     from stg.fm_events e join core.fm_matches_xw x using (fm_match_id)
                     left join (select distinct player_fm_id, player_id from core.fm_players) p
                       on p.player_fm_id = e.player_fm_id::bigint""",
+    "fm_lineups": """
+        select x.match_id, c.club_id, coalesce(p.player_id, 'fm-' || m.player_fm_id) player_id,
+               m.name, m.starter, m.shirt, m.usual_position_id, m.layout_x, m.layout_y,
+               m.sub_in, m.sub_out, m.rating
+        from stg.fm_player_match m join core.fm_matches_xw x using (fm_match_id)
+        left join core.fm_clubs c on c.competition_id = m.competition_id
+             and c.season = m.season and c.fm_id = m.team_fm_id
+        left join (select distinct player_fm_id, player_id from core.fm_players) p
+          on p.player_fm_id = m.player_fm_id
+        where x.match_id is not null""",
     "matchup_factors": "select * from research.matchup_factors",
     "matchup_factor_bins": "select * from research.matchup_factor_bins",
     "timelines": """

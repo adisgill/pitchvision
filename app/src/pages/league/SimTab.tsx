@@ -33,6 +33,9 @@ export default function SimTab({ league, season }: { league: string; season: num
                                    where competition_id = ${lit(league)} and current` : null);
   const ms = useQuery(rule ? `select ${MATCH_COLS} from matches where competition_id = ${lit(league)} and season = ${season}` : null);
   const official = useQuery(rule ? `select * from season_sim where competition_id = ${lit(league)} and season = ${season}` : null);
+  // the real schedule (FotMob) when we have it: every fixture of the league-season
+  const sched = useQuery(rule ? `select competition_id, home_club, away_club, finished, kickoff_utc from fixtures
+                                 where competition_id = ${lit(league)} and season = ${season} and not cancelled` : null);
   const [adj, setAdj] = useState<Record<string, number>>({});
   useEffect(() => setAdj({}), [league]);
   const dAdj = useDebounced(adj, 220);
@@ -50,10 +53,23 @@ export default function SimTab({ league, season }: { league: string; season: num
     if (rated.length < clubs.size) return { error: `Ratings are missing for ${clubs.size - rated.length} clubs this season.` };
     const played = ms.rows.filter((m) => m.played).map((m) => ({ h: m.home_club, a: m.away_club }));
     const ids = rated.map((r) => r.club_id);
-    const fixtures = remainingFixtures(ids, played);
+    const schedRows = sched.rows.filter((f) => f.competition_id === league);
+    let fixtures, source: "schedule" | "inferred", skipped = 0;
+    if (schedRows.length) {
+      // remaining = scheduled pairs not yet in our results (covers results the feed hasn't posted yet)
+      const done = new Set(played.map((p) => `${p.h}|${p.a}`));
+      const ok = new Set(ids);
+      const rem = schedRows.filter((f) => !done.has(`${f.home_club}|${f.away_club}`));
+      fixtures = rem.filter((f) => ok.has(f.home_club) && ok.has(f.away_club)).map((f) => ({ h: f.home_club, a: f.away_club }));
+      skipped = rem.length - fixtures.length;
+      source = "schedule";
+    } else {
+      fixtures = remainingFixtures(ids, played);
+      source = "inferred";
+    }
     const home = Number(rated[0].dc_home);
-    return { table, tBy, rated, fixtures, home, ids, played: played.length };
-  }, [ratings.rows, ms.rows, rule, league]);
+    return { table, tBy, rated, fixtures, home, ids, played: played.length, source, skipped };
+  }, [ratings.rows, ms.rows, sched.rows, rule, league]);
 
   useEffect(() => {
     if (!rule || !setup || "error" in setup) return;
@@ -115,7 +131,10 @@ export default function SimTab({ league, season }: { league: string; season: num
         Drag a slider to make a team better or worse: +10% means it scores 10% more and concedes 10% less against everyone. Use it for an injury crisis,
         a new signing or a hunch, and watch every zone's odds move. This quick simulator ranks on points, goal difference and goals scored only and holds
         strengths fixed; the official numbers (◇ and the "vs official" column) come from the pipeline's 10,000 runs with the league's real tiebreakers and
-        strength uncertainty. There's no fixture list: the remaining games are the unplayed half of the double round-robin.
+        strength uncertainty.{" "}
+        {setup && !("error" in setup) && (setup.source === "schedule"
+          ? <>Remaining games are the league's actual schedule ({fmt.n(setup.fixtures.length)} fixtures){setup.skipped ? `; ${setup.skipped} skipped because a club has no current rating` : ""}.</>
+          : <>No schedule loaded for this league-season, so the remaining games are inferred as the unplayed half of the double round-robin.</>)}
       </div>
       <div className="grid">
         <div className="c7">

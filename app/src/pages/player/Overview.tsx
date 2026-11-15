@@ -48,15 +48,24 @@ export function seasonKeys(seasonsC: Row[], seasonsA: Row[]): [string, string][]
   return [...a, ...c];
 }
 
-export default function Overview({ id, seasonsC, seasonsA }: { id: string; seasonsC: Row[]; seasonsA: Row[] }) {
+export default function Overview({ id, seasonsC, seasonsA, seasonsF = [] }: { id: string; seasonsC: Row[]; seasonsA: Row[]; seasonsF?: Row[] }) {
   const keys = seasonKeys(seasonsC, seasonsA);
   const [sk, setSk] = useParam("rs", keys[0]?.[0] ?? "");
   const key = keys.some(([k]) => k === sk) ? sk : keys[0]?.[0] ?? null;
   const pr = usePercentiles(id, key);
 
+  // career: Transfermarkt seasons, then FotMob seasons Transfermarkt doesn't cover (2026-27 on)
+  const career: Row[] = useMemo(() => {
+    const seen = new Set(seasonsC.map((r) => `${r.competition_id}:${r.season}`));
+    const maxC = Math.max(-Infinity, ...seasonsC.map((r) => r.season));
+    const extra = seasonsF.filter((r) => !seen.has(`${r.competition_id}:${r.season}`) && (r.season > maxC || !seasonsC.length))
+      .map((r) => ({ ...r, source: "FotMob" }));
+    return [...seasonsC.map((r) => ({ ...r, source: "Transfermarkt" })), ...extra];
+  }, [seasonsC, seasonsF]);
+
   const timeline = useMemo(() => {
-    if (!seasonsC.length) return undefined;
-    const rows = [...seasonsC].sort((x, y) => x.season - y.season || (x.club ?? "").localeCompare(y.club ?? ""))
+    if (!career.length) return undefined;
+    const rows = [...career].sort((x, y) => x.season - y.season || (x.club ?? "").localeCompare(y.club ?? ""))
       .map((r) => ({ ...r, s: seasonLabel(r.season), clubName: r.club ?? r.club_id }));
     const clubs = [...new Set(rows.map((r) => r.clubName))];
     const range = clubs.map((_, i) => (i < 8 ? slot(i + 1) : css("--muted")));
@@ -89,9 +98,9 @@ export default function Overview({ id, seasonsC, seasonsA }: { id: string; seaso
       </div>
       <div className="c6 stack" style={{ gap: 16 }}>
         {timeline ? (
-          <Figure title="Career in the top leagues" subtitle="League minutes per season, coloured by club (Transfermarkt; top-seven leagues from 2012-13)."
-                  source="Transfermarkt" plot={timeline} alt="Minutes per season by club"
-                  table={{ rows: seasonsC, cols: [["season", "Season", (v) => seasonLabel(v)], ["club", "Club"], ["minutes", "Minutes", (v) => fmt.n(v)], ["goals", "Goals"], ["assists", "Assists"]] }} />
+          <Figure title="Career in the top leagues" subtitle="League minutes per season, coloured by club (Transfermarkt from 2012-13; FotMob for seasons after the July 2026 freeze)."
+                  source="Transfermarkt, FotMob" plot={timeline} alt="Minutes per season by club"
+                  table={{ rows: career, cols: [["season", "Season", (v) => seasonLabel(v)], ["club", "Club"], ["minutes", "Minutes", (v) => fmt.n(v)], ["goals", "Goals"], ["assists", "Assists"]] }} />
         ) : <Card title="Career"><Empty>No top-league minutes since 2012-13 on record; this player appears through event data only.</Empty></Card>}
         {pr.me && (
           <Card className="flat" title="Where the percentiles come from">

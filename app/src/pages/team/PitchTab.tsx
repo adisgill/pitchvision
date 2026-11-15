@@ -17,31 +17,52 @@ export const MEASURES: [string, string, number, string][] = [
   ["vaep_def", "VAEP (defensive)", 3, "change in conceding chance from actions starting in the zone"],
 ];
 
+/** Current seasons (FotMob shot maps): shot-based measures only. */
+export const FM_MEASURES: [string, string, number, string][] = [
+  ["xg", "xG (shot origin)", 3, "expected goals from shots taken in the zone"],
+  ["shots", "Shots", 2, "shots taken from the zone"],
+  ["goals", "Goals", 2, "goals scored from shots in the zone"],
+  ["xgps", "xG per shot", 3, "average quality of shots from the zone (zones without shots blank)"],
+];
+
 const third = (zx: number) => (zx <= 3 ? "own third" : zx <= 7 ? "middle third" : "final third");
 const lane = (zy: number) => (zy <= 1 || zy >= 6 ? "wide areas" : zy === 2 || zy === 5 ? "half-spaces" : "central lanes");
 export const zoneName = (zx: number, zy: number) => `${lane(zy)} of the ${third(zx)}`;
 
 /** Per-match zone values for every club in a provider-competition-season, plus the league mean. */
 export function useZones(provider: string, comp: string, season: number, measure: string) {
-  const q = useQuery(provider ? `select club_id, side, zx, zy, ${measure} v, matches from zones_team
-    where provider = ${lit(provider)} and competition_id = ${lit(comp)} and season = ${season}` : null);
+  const fm = provider === "fotmob";
+  const ratio = measure === "xgps";
+  const q = useQuery(!provider ? null : fm
+    ? `select club_id, side, zx, zy, ${ratio ? "xg" : measure} as v, shots as n, matches from fm_zones_team
+       where competition_id = ${lit(comp)} and season = ${season}`
+    : `select club_id, side, zx, zy, ${measure} as v, 0 as n, matches from zones_team
+       where provider = ${lit(provider)} and competition_id = ${lit(comp)} and season = ${season}`);
   return useMemo(() => {
-    const per = new Map<string, number>(); // club|side|zx|zy -> per match
-    const sum = new Map<string, number>(), clubs = new Set<string>();
+    const per = new Map<string, number>(); // club|side|zx|zy -> per match (or xG per shot)
+    const sum = new Map<string, number>(), sumN = new Map<string, number>(), clubs = new Set<string>();
     q.rows.forEach((r: Row) => {
-      const v = (r.v ?? 0) / Math.max(1, r.matches);
-      per.set(`${r.club_id}|${r.side}|${r.zx}|${r.zy}`, v);
-      sum.set(`${r.side}|${r.zx}|${r.zy}`, (sum.get(`${r.side}|${r.zx}|${r.zy}`) ?? 0) + v);
+      const k = `${r.side}|${r.zx}|${r.zy}`;
+      const v = ratio ? (r.n > 0 ? (r.v ?? 0) / r.n : 0) : (r.v ?? 0) / Math.max(1, r.matches);
+      per.set(`${r.club_id}|${k}`, v);
+      sum.set(k, (sum.get(k) ?? 0) + (ratio ? (r.v ?? 0) : v));
+      sumN.set(k, (sumN.get(k) ?? 0) + (r.n ?? 0));
       clubs.add(r.club_id);
     });
-    const avg = (side: string, zx: number, zy: number) => (sum.get(`${side}|${zx}|${zy}`) ?? 0) / Math.max(1, clubs.size);
+    const avg = (side: string, zx: number, zy: number) => {
+      const k = `${side}|${zx}|${zy}`;
+      return ratio ? ((sumN.get(k) ?? 0) > 0 ? (sum.get(k) ?? 0) / sumN.get(k)! : 0) : (sum.get(k) ?? 0) / Math.max(1, clubs.size);
+    };
     const get = (club: string, side: string, zx: number, zy: number) => per.get(`${club}|${side}|${zx}|${zy}`) ?? 0;
     return { loading: q.loading, ready: q.rows.length > 0, get, avg, clubs: clubs.size };
-  }, [q.rows, q.loading]);
+  }, [q.rows, q.loading, ratio]);
 }
 
 export default function PitchTab({ id, name }: { id: string; name: string }) {
-  const sets = useQuery(`select distinct provider, competition_id, season from zones_team where club_id = ${lit(id)} order by season desc`);
+  const sets = useQuery(`select * from (
+      select distinct 'fotmob' as provider, competition_id, season, 0 as o from fm_zones_team where club_id = ${lit(id)}
+      union all select distinct provider, competition_id, season, 1 as o from zones_team where club_id = ${lit(id)})
+    order by o, season desc`);
   const all = useQuery(`select provider, competition_id, season from zones_team group by all order by season desc`);
   const [dsP, setDs] = useParam("zs", "");
   const ds = dsP || (sets.rows[0] ? `${sets.rows[0].provider}:${sets.rows[0].competition_id}:${sets.rows[0].season}` : "");
@@ -50,7 +71,9 @@ export default function PitchTab({ id, name }: { id: string; name: string }) {
   const [measure, setMeasure] = useParam("zm", "xg");
   const [side, setSide] = useParam("zside", "for");
   const [mode, setMode] = useParam("zmode", "rel");
-  const mm = MEASURES.find((m) => m[0] === measure) ?? MEASURES[0];
+  const isFm = provider === "fotmob";
+  const measures = isFm ? FM_MEASURES : MEASURES;
+  const mm = measures.find((m) => m[0] === measure) ?? measures[0];
   const z = useZones(provider, comp, season, mm[0]);
 
   const cells: ZoneCell[] = useMemo(() => {
@@ -87,7 +110,7 @@ export default function PitchTab({ id, name }: { id: string; name: string }) {
 
   if (!sets.loading && !sets.rows.length) {
     const avail = all.rows.map((r) => `${LEAGUES[r.competition_id] ?? r.competition_id} ${seasonLabel(r.season, r.competition_id)}`);
-    return <Empty>No event data for {name}. Pitch maps exist only for the free event-data seasons: {avail.join(", ")}.</Empty>;
+    return <Empty>No pitch data for {name}. Current shot maps cover the 2024-25 season onward (FotMob, still loading for some leagues); full-action maps exist only for the free event-data seasons: {avail.join(", ")}.</Empty>;
   }
   const divMode = mode === "rel" || side === "net";
   const maxAbs = Math.max(1e-9, ...cells.map((c) => Math.abs(c.v)));
@@ -95,16 +118,16 @@ export default function PitchTab({ id, name }: { id: string; name: string }) {
     <div className="grid">
       <div className="c12">
         <div className="filters" style={{ margin: 0 }}>
-          <Select label="Season (event data)" value={ds} onChange={(v) => setDs(v)} options={sets.rows.map((r) => [`${r.provider}:${r.competition_id}:${r.season}`,
-            `${LEAGUES[r.competition_id] ?? r.competition_id} ${seasonLabel(r.season, r.competition_id)} (${r.provider === "wyscout" ? "Wyscout" : "StatsBomb"})`])} />
-          <Select label="Measure" value={measure} onChange={(v) => setMeasure(v)} options={MEASURES.map(([k, l]) => [k, l])} />
+          <Select label="Season" value={ds} onChange={(v) => setDs(v)} options={sets.rows.map((r) => [`${r.provider}:${r.competition_id}:${r.season}`,
+            `${LEAGUES[r.competition_id] ?? r.competition_id} ${seasonLabel(r.season, r.competition_id)} · ${r.provider === "fotmob" ? "current shot maps (FotMob)" : `full event data, historical (${r.provider === "wyscout" ? "Wyscout" : "StatsBomb"})`}`])} />
+          <Select label="Measure" value={mm[0]} onChange={(v) => setMeasure(v)} options={measures.map(([k, l]) => [k, l])} />
           <Field label="Whose actions"><Seg value={side as any} onChange={(v) => setSide(v)} label="Side" options={[["for", `${name}`], ["against", "Opponents"], ["net", "Net"]] as any} /></Field>
           <Field label="Scale"><Seg value={mode as any} onChange={(v) => setMode(v)} label="Scale" options={[["rel", "vs league average"], ["raw", "Raw"]] as any} /></Field>
         </div>
       </div>
       <div className="c8">
         <Card title={`${side === "against" ? "What opponents do against" : side === "net" ? "Where" : "Where"} ${name}${side === "net" ? " out-do their opponents" : side === "against" ? "" : ` ${measure === "xg" || measure === "shots" ? "shoot from" : "act"}`}: ${mm[1]}`}
-              sub={<>Per match, {mm[3]}, on a 12 × 8 grid. {name} attack left to right{side !== "for" ? "; opponents' actions are mirrored into the same view, so their attacks run right to left onto this goal" : ""}.
+              sub={<>{mm[0] === "xgps" ? "Average xG per shot" : "Per match"}, {mm[3]}, on a 12 × 8 grid. {name} attack left to right{side !== "for" ? "; opponents' actions are mirrored into the same view, so their attacks run right to left onto this goal" : ""}.
                 {mode === "rel" ? ` Blue = more than the average ${LEAGUES[comp] ?? comp} side (${z.clubs} teams), red = less.` : ""} Hover any zone.</>}>
           {cells.length ? (
             <>
@@ -128,7 +151,7 @@ export default function PitchTab({ id, name }: { id: string; name: string }) {
             {takeaways.map((t, i) => <li key={i}>{t}</li>)}
           </ul>
           <p className="xs muted" style={{ marginTop: 12 }}>Lanes: wide areas are the outer two zone rows on each touchline, half-spaces the next row in, central lanes the middle two.
-            Zone values are season totals divided by matches. Event data: {provider === "wyscout" ? "Wyscout public dataset (CC BY 4.0)" : "StatsBomb open data, aggregated"}.</p>
+            Zone values are season totals divided by matches. Source: {isFm ? "FotMob shot maps (Opta), shots only; switch to a historical event-data season for passes, carries and defending" : provider === "wyscout" ? "Wyscout public dataset (CC BY 4.0)" : "StatsBomb open data, aggregated"}.</p>
           <p className="xs muted">Want this against a specific opponent? The <a href="#/matchup">pitch matchup</a> overlays one team's attack on another's defence.</p>
         </Card>
       </div>

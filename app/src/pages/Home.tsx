@@ -2,7 +2,8 @@ import * as Plot from "@observablehq/plot";
 import { useMemo } from "react";
 import { Link } from "react-router-dom";
 import { useManifest, useQuery } from "../db";
-import { css, fmt, LEAGUES, SIM_LEAGUES } from "../lib/format";
+import { css, fmt, LEAGUES, SHORT, SIM_LEAGUES } from "../lib/format";
+import { sinceSql, UpcomingTable, useUpcoming } from "./match/upcoming";
 import { Figure } from "../ui/Figure";
 import { Icon } from "../ui/icons";
 import { Card, ClubLink, Loading, MatchLink, OutcomeBar, PageHead, ProbBar, Tile } from "../ui/kit";
@@ -19,9 +20,23 @@ const TOOLS: [string, string, string, string][] = [
 export default function Home() {
   const manifest = useManifest();
   const wf = useQuery(`select model, rps, n from wf_eval where league = 'all' and split like 'test%'`);
-  const recent = useQuery(`select *, case when home_goals > away_goals then mkt_h when home_goals < away_goals then mkt_a else mkt_d end p_res
-                           from matches where played and match_date >= (select max(match_date) from matches where played) - interval 6 day
-                           order by kickoff_utc desc, match_id limit 40`);
+  // football-data results (with odds), plus anything FotMob has already that football-data
+  // hasn't posted yet, so the newest results always show
+  const recent = useQuery(`
+    select * from (
+      select match_id, fm_id, competition_id, kickoff_utc, home_club, away_club, home_team, away_team, home_goals, away_goals,
+             coalesce(home_xg, fm_xh, proxy_home_xg) xh, coalesce(away_xg, fm_xa, proxy_away_xg) xa, mkt_h, mkt_d, mkt_a, p_res
+      from (select m.*, t.fm_match_id fm_id, t.home_expected_goals fm_xh, t.away_expected_goals fm_xa,
+                   case when m.home_goals > m.away_goals then m.mkt_h when m.home_goals < m.away_goals then m.mkt_a else m.mkt_d end p_res
+            from matches m left join fm_team_match t using (match_id)
+            where m.played and m.match_date >= (select max(match_date) from matches where played) - interval 6 day)
+      union all
+      select null, f.fm_match_id, f.competition_id, f.kickoff_utc, f.home_club, f.away_club,
+             coalesce(hc.name, f.home_name), coalesce(ac.name, f.away_name), f.home_goals, f.away_goals,
+             null, null, null, null, null, null
+      from fixtures f left join clubs hc on hc.club_id = f.home_club left join clubs ac on ac.club_id = f.away_club
+      where f.finished and f.match_id is null and f.kickoff_utc >= current_date - interval 9 day
+    ) order by kickoff_utc desc nulls last, competition_id limit 40`);
   const race = useQuery(`select competition_id, club_id, name, p_title, p_relegation, exp_points from season_sim
                          qualify row_number() over (partition by competition_id order by p_title desc) <= 3`);
   const movers = useQuery(`
@@ -33,6 +48,7 @@ export default function Home() {
     select last.club, name, e1, e1 - e0 delta from last join prev using (club) order by abs(e1 - e0) desc limit 8`);
   const fac = useQuery(`select verdict, count(*) n from matchup_factors group by 1`);
   const lt = useQuery(`select * from league_translation order by log_factor`);
+  const up = useUpcoming(`f.kickoff_utc < ${sinceSql(-24 * 7)}`, 120);
 
   const rps = Object.fromEntries(wf.rows.map((r) => [r.model, r.rps]));
   const upset = [...recent.rows].filter((m) => m.p_res != null).sort((a, b) => a.p_res - b.p_res)[0];
@@ -70,6 +86,15 @@ export default function Home() {
       </div>
 
       <div className="grid">
+        {up.rows.length > 0 && (
+          <div className="c12">
+            <Card title={`${up.rows.length} matches in the next 7 days`}
+                  sub="Kick-off in your local time. Our forecast is the Dixon-Coles model from current ratings, computed in your browser; Predict opens the full score matrix and markets."
+                  right={<Link className="btn" to="/matches?view=upcoming">All fixtures</Link>}>
+              <UpcomingTable rows={up.rows} maxHeight={460} />
+            </Card>
+          </div>
+        )}
         <div className="c8">
           <Card title="Latest results" sub="With the closing market's pre-match odds (home, draw, away) and each side's expected goals from shots."
                 right={<Link className="btn" to="/matches">All matches</Link>}>
@@ -84,12 +109,13 @@ export default function Home() {
               <table className="data">
                 <tbody>
                   {recent.rows.slice(0, 24).map((m) => (
-                    <tr key={m.match_id}>
-                      <td className="muted xs">{LEAGUES[m.competition_id]?.split(" ")[0]}</td>
+                    <tr key={m.match_id ?? `fm-${m.fm_id}`}>
+                      <td className="muted xs" title={LEAGUES[m.competition_id]}>{SHORT[m.competition_id] ?? m.competition_id}</td>
                       <td className="r"><ClubLink id={m.home_club} name={m.home_team} bold={m.home_goals > m.away_goals} /></td>
-                      <td className="c"><MatchLink id={m.match_id}><b className="num">{fmt.n(m.home_goals)}–{fmt.n(m.away_goals)}</b></MatchLink></td>
+                      <td className="c">{m.match_id ? <MatchLink id={m.match_id}><b className="num">{fmt.n(m.home_goals)}–{fmt.n(m.away_goals)}</b></MatchLink>
+                        : <b className="num" title="Result from FotMob; odds and match centre follow when football-data posts it">{fmt.n(m.home_goals)}–{fmt.n(m.away_goals)}</b>}</td>
                       <td><ClubLink id={m.away_club} name={m.away_team} bold={m.away_goals > m.home_goals} /></td>
-                      <td className="r xs muted num">{m.proxy_home_xg != null ? `${fmt.n(m.home_xg ?? m.proxy_home_xg, 1)}–${fmt.n(m.away_xg ?? m.proxy_away_xg, 1)} xG` : ""}</td>
+                      <td className="r xs muted num">{m.xh != null ? `${fmt.n(m.xh, 1)}–${fmt.n(m.xa, 1)} xG` : m.match_id ? "" : <span className="pill">new</span>}</td>
                       <td style={{ width: 150 }}>{m.mkt_h != null && <OutcomeBar thin h={m.mkt_h} d={m.mkt_d} a={m.mkt_a} />}</td>
                       <td className="r xs">{m.p_res != null && m.p_res < 0.25 ? <span className="pill bad">upset {fmt.pct(m.p_res)}</span> : ""}</td>
                     </tr>

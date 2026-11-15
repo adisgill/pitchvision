@@ -18,7 +18,25 @@ export default function Match() {
     left join players p on p.player_id = e.player_id left join players pi on pi.player_id = e.player_in_id
     left join players pa on pa.player_id = e.assist_id
     where e.match_id = ${lit(id)} and e.type <> 'shootout' order by e.minute, e.type`);
-  const lu = useQuery(`select l.*, p.name from match_lineups l left join players p using (player_id) where l.match_id = ${lit(id)}`);
+  // Transfermarkt line-ups where they exist (to July 2026); FotMob's after that, with
+  // position groups from the line-up layout (same rule as metrics/fotmob.py)
+  const lu = useQuery(`
+    select l.match_id, l.club_id, l.player_id, l.starter, l.position_group, l.shirt, l.captain, p.name
+    from match_lineups l left join players p using (player_id) where l.match_id = ${lit(id)}
+    union all
+    select match_id, club_id, player_id, starter,
+           case when usual_position_id = 0 then 'GK'
+                when layout_x is null then case usual_position_id when 1 then 'CB' when 2 then 'CM' else 'ST' end
+                when usual_position_id = 1 then case when layout_y < 0.22 or layout_y > 0.78 then 'FB' else 'CB' end
+                when usual_position_id = 2 then case when layout_y < 0.22 or layout_y > 0.78 then 'W'
+                                                     when layout_x < 0.45 then 'DM' when layout_x > 0.65 then 'AM' else 'CM' end
+                else case when layout_y < 0.22 or layout_y > 0.78 then 'W' else 'ST' end end as position_group,
+           try_cast(shirt as integer) as shirt, false as captain, name
+    from fm_lineups where match_id = ${lit(id)}
+      and not exists (select 1 from match_lineups where match_id = ${lit(id)})`);
+  // current seasons (after the Transfermarkt freeze): FotMob events and Opta team stats
+  const fe = useQuery(`select * from fm_events where match_id = ${lit(id)} order by minute, minute_added nulls first`);
+  const fs = useQuery(`select * from fm_team_match where match_id = ${lit(id)}`);
   const tl = useQuery(`select * from timelines where match_id = ${lit(id)} order by minute`);
   const wpp = useQuery(`select term, coef from wp_params`);
   const ea = useQuery(`select * from matches_a where canonical_match_id = ${lit(id)}`);
@@ -30,12 +48,20 @@ export default function Match() {
     from matches where played and match_id <> ${lit(id)} and ((home_club = ${lit(m.home_club)} and away_club = ${lit(m.away_club)})
     or (home_club = ${lit(m.away_club)} and away_club = ${lit(m.home_club)})) order by match_date desc limit 8` : null);
 
+  const evSource: "tm" | "fm" | null = ev.rows.length && ev.rows[0].match_id === id ? "tm" : fe.rows.length && fe.rows[0].match_id === id ? "fm" : null;
+  const events: Row[] = useMemo(() => {
+    if (evSource === "tm") return ev.rows;
+    if (evSource !== "fm" || !m) return [];
+    return fe.rows.map((e) => fmEvent(e, m.home_club, m.away_club));
+  }, [evSource, ev.rows, fe.rows, m]);
+  const evLoading = ev.loading || fe.loading;
+
   const wp: WpPoint[] | null = useMemo(() => {
     if (!m) return null;
     // the browser model reproduces the pipeline exactly (models.test.ts) and also tracks red
     // cards and the 90th minute, so prefer it whenever the events are here
-    const hasEvents = !ev.loading && ev.rows.some((e) => e.type === "goals") === (m.home_goals + m.away_goals > 0);
-    if (m.lh != null && wpp.rows.length && hasEvents) return computeWp(m.lh, m.la, wpp.rows as WpParams, ev.rows, m.home_club);
+    const hasEvents = !evLoading && events.some((e) => e.type === "goals") === (m.home_goals + m.away_goals > 0);
+    if (m.lh != null && wpp.rows.length && hasEvents) return computeWp(m.lh, m.la, wpp.rows as WpParams, events, m.home_club);
     if (tl.rows.length && tl.rows[0].match_id === id) {
       const pts: WpPoint[] = tl.rows.map((r) => ({ minute: r.minute, gd: r.gd, redD: 0, p_home: r.p_home, p_draw: r.p_draw, p_away: r.p_away }));
       const gd = m.home_goals - m.away_goals;
@@ -43,15 +69,16 @@ export default function Match() {
       return pts;
     }
     return null;
-  }, [m, tl.rows, wpp.rows, ev.rows, ev.loading]);
+  }, [m, tl.rows, wpp.rows, events, evLoading]);
 
   const dc = useMemo(() => (m?.lh != null ? scoreMatrix(m.lh, m.la, m.rho ?? 0) : null), [m]);
   const dcs = dc ? summarise(dc) : null;
 
   if (!m) return <Loading state={mq.loading || mq.error ? mq : { loading: false, error: "match not found" }} />;
 
-  const goals = ev.rows.filter((e) => e.type === "goals");
-  const reds = ev.rows.filter((e) => e.type === "cards" && e.card !== "yellow");
+  const goals = events.filter((e) => e.type === "goals");
+  const reds = events.filter((e) => e.type === "cards" && e.card !== "yellow");
+  const f = fs.rows[0]?.match_id === id ? fs.rows[0] : undefined;
   const res = m.home_goals > m.away_goals ? 0 : m.home_goals === m.away_goals ? 1 : 2;
   const forecasts: { name: string; p: [number, number, number] | null; note: string }[] = [
     { name: "Closing market", p: m.mkt_h != null ? [m.mkt_h, m.mkt_d, m.mkt_a] : null, note: "de-vigged closing odds" },
@@ -65,8 +92,8 @@ export default function Match() {
   const starters = (club: string) => lu.rows.filter((l) => l.club_id === club && l.starter)
     .map((l) => ({ name: l.name ?? "?", group: l.position_group, shirt: l.shirt, id: l.player_id, captain: l.captain }));
   const bench = (club: string) => lu.rows.filter((l) => l.club_id === club && !l.starter);
-  const subOn = new Map(ev.rows.filter((e) => e.type === "substitutions").map((e) => [e.player_in_id, e.minute]));
-  const subOff = new Map(ev.rows.filter((e) => e.type === "substitutions").map((e) => [e.player_id, e.minute]));
+  const subOn = new Map(events.filter((e) => e.type === "substitutions").map((e) => [e.player_in_id, e.minute]));
+  const subOff = new Map(events.filter((e) => e.type === "substitutions").map((e) => [e.player_id, e.minute]));
 
   return (
     <>
@@ -131,9 +158,9 @@ export default function Match() {
         </div>
 
         <div className="c12">
-          <Card title="How the match unfolded" sub={ev.rows.length ? "Goals, cards and substitutions by minute (Transfermarkt folds added time into 45' and 90'). Hover for details." : undefined}>
-            {ev.rows.length ? <Timeline events={ev.rows} homeId={m.home_club} homeName={m.home_team} awayName={m.away_team} />
-              : <Empty>No event data for this match (Transfermarkt events run to July 2026).</Empty>}
+          <Card title="How the match unfolded" sub={events.length ? `Goals, cards and substitutions by minute (${evSource === "fm" ? "FotMob" : "Transfermarkt"}; added time is shown at 45' and 90'). Hover for details.` : undefined}>
+            {events.length ? <Timeline events={events} homeId={m.home_club} homeName={m.home_team} awayName={m.away_team} />
+              : <Empty>{evLoading ? "Loading…" : "No event data for this match yet."}</Empty>}
           </Card>
         </div>
 
@@ -146,8 +173,15 @@ export default function Match() {
           </div>
         )}
         <div className={dc ? "c7" : "c12"}>
-          <Card title="Match stats">
+          <Card title="Match stats" sub={f ? "Opta data via FotMob, then football-data.co.uk." : undefined}>
             <Legend items={[{ label: m.home_team, color: "var(--s1)", kind: "rect" }, { label: m.away_team, color: "var(--s2)", kind: "rect" }]} />
+            {f && (
+              <>
+                <div className="eyebrow" style={{ margin: "6px 0 8px" }}>Opta (FotMob)</div>
+                <StatBars rows={fmStatRows(f)} />
+                <div className="eyebrow" style={{ margin: "16px 0 8px" }}>football-data.co.uk</div>
+              </>
+            )}
             <StatBars rows={[
               ...(m.home_xg != null ? [{ label: "xG (published)", h: m.home_xg, a: m.away_xg, d: 2 }] : []),
               ...(a ? [{ label: `xG (our model, ${a.provider === "wyscout" ? "Wyscout" : "StatsBomb"} events)`, h: a.xg_home, a: a.xg_away, d: 2 }] : []),
@@ -171,7 +205,7 @@ export default function Match() {
         {a?.provider === "wyscout" && shots.rows.length > 0 && shots.rows[0].match_id === Number(a.match_id) && <ShotSection shots={shots.rows} m={m} />}
 
         <div className="c12">
-          <Card title="Line-ups" sub={lu.rows.length ? "Starting XIs by position group (Transfermarkt gives groups, not exact spots). (C) captain; ↑/↓ minute subbed on/off." : undefined}>
+          <Card title="Line-ups" sub={lu.rows.length ? "Starting XIs by position group (approximate spots: the sources give groups or a schematic layout). (C) captain; ↑/↓ minute subbed on/off." : undefined}>
             {lu.rows.length ? (
               <div className="grid">
                 <div className="c8"><LineupPitch home={starters(m.home_club)} away={starters(m.away_club)} /></div>
@@ -219,6 +253,49 @@ export default function Match() {
       </div>
     </>
   );
+}
+
+/** A FotMob event in the Transfermarkt event shape the timeline and win-probability model use.
+ *  FotMob's ``is_home`` is the side that benefits (own goals included; checked against every
+ *  score). Substitutions carry names only. */
+function fmEvent(e: Row, home: string, away: string): Row {
+  const type = e.type === "goal" ? "goals" : e.type === "card" ? "cards" : "substitutions";
+  const card = e.card === "Yellow" ? "yellow" : e.card === "YellowRed" ? "second_yellow" : e.card === "Red" ? "red" : null;
+  const pid = typeof e.player_id === "string" ? e.player_id.replace(/\.0$/, "") : null;
+  return {
+    match_id: e.match_id, minute: Math.min(90, e.minute ?? 0), added: e.minute_added, type,
+    club_id: e.is_home ? home : away, player_id: type === "substitutions" ? null : pid,
+    name: type === "substitutions" ? e.sub_out : e.player_name, in_name: e.sub_in ?? null,
+    card, is_own_goal: !!e.own_goal, is_penalty: !!e.penalty,
+  };
+}
+
+const pctOf = (a: number | null, b: number | null) => (a != null && b ? (100 * a) / b : null);
+
+function fmStatRows(f: Row) {
+  const km = (v: number | null) => (v == null ? null : v > 1000 ? v / 1000 : v);
+  return [
+    { label: "xG", h: f.home_expected_goals, a: f.away_expected_goals, d: 2 },
+    { label: "xG from open play", h: f.home_expected_goals_open_play, a: f.away_expected_goals_open_play, d: 2 },
+    { label: "xG from set pieces", h: f.home_expected_goals_set_play, a: f.away_expected_goals_set_play, d: 2 },
+    { label: "xG on target (xGOT)", h: f.home_expected_goals_on_target, a: f.away_expected_goals_on_target, d: 2 },
+    { label: "Possession %", h: f.home_ballpossesion, a: f.away_ballpossesion },
+    { label: "Shots", h: f.home_total_shots, a: f.away_total_shots },
+    { label: "Shots on target", h: f.home_shotsontarget, a: f.away_shotsontarget },
+    { label: "Big chances", h: f.home_big_chance, a: f.away_big_chance },
+    { label: "Big chances missed", h: f.home_big_chance_missed_title, a: f.away_big_chance_missed_title },
+    { label: "Touches in the opposition box", h: f.home_touches_opp_box, a: f.away_touches_opp_box },
+    { label: "Passes", h: f.home_passes, a: f.away_passes },
+    { label: "Pass accuracy %", h: pctOf(f.home_accurate_passes, f.home_passes), a: pctOf(f.away_accurate_passes, f.away_passes) },
+    { label: "Tackles", h: f.home_matchstats_headers_tackles, a: f.away_matchstats_headers_tackles },
+    { label: "Interceptions", h: f.home_interceptions, a: f.away_interceptions },
+    { label: "Duels won", h: f.home_duel_won, a: f.away_duel_won },
+    { label: "Aerials won", h: f.home_aerials_won, a: f.away_aerials_won },
+    { label: "Dribbles completed", h: f.home_dribbles_succeeded, a: f.away_dribbles_succeeded },
+    { label: "Goalkeeper saves", h: f.home_keeper_saves, a: f.away_keeper_saves },
+    { label: "Distance covered (km)", h: km(f.home_physical_metrics_distance_covered), a: km(f.away_physical_metrics_distance_covered), d: 1 },
+    { label: "Sprints", h: f.home_physical_metrics_number_of_sprints, a: f.away_physical_metrics_number_of_sprints },
+  ];
 }
 
 function WpFigure({ wp, home, away, goals, reds, homeId, source }: { wp: WpPoint[]; home: string; away: string; goals: Row[]; reds: Row[]; homeId: string; source: string }) {

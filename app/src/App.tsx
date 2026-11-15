@@ -73,7 +73,10 @@ function Palette({ onClose }: { onClose: () => void }) {
       select 'team' kind, club_id id, name, league sub, 0 o from clubs where name ilike ${lit(`%${term}%`)} and league is not null
       union all
       select 'player', p.player_id, p.name, coalesce(p.position, ''), 1 from players p
-      where p.name ilike ${lit(`%${term}%`)} and p.player_id in (select player_id from players_c union select player_id from players_a)
+      where p.name ilike ${lit(`%${term}%`)} and p.player_id in (select player_id from players_c union select player_id from players_a
+        union select player_id from fm_player_season)
+      union all
+      select 'player', f.player_id, f.name, coalesce(f.country, ''), 1 from fm_players f where f.name ilike ${lit(`%${term}%`)}
     ) order by o, length(name) limit 14` : null);
   const pagesHit = NAV.flatMap((g) => g.items).filter((i) => term && i.label.toLowerCase().includes(term.toLowerCase()));
   const leaguesHit = Object.entries(LEAGUES).filter(([, n]) => term && n.toLowerCase().includes(term.toLowerCase())).slice(0, 4);

@@ -7,6 +7,13 @@ import { Card, ClubLink, DataTable, Field, Loading, PageHead, Seg, Select, Tile,
 import { HeatLegend, ZoneHeat } from "../ui/pitch";
 import { dsLabel, zoneName } from "./player/shared";
 
+const FM_MEAS: [string, string, (v: number) => string][] = [
+  ["xg", "xG", (v) => fmt.n(v, 3)],
+  ["shots", "Shots", (v) => fmt.n(v, 2)],
+  ["goals", "Goals", (v) => fmt.n(v, 2)],
+];
+const srcLabel = (p: string) => (p === "fotmob" ? "FotMob (current)" : `${dsLabel(p)} (historical)`);
+
 const MEAS: [string, string, (v: number) => string][] = [
   ["xg", "xG", (v) => fmt.n(v, 3)],
   ["xt_added", "xT added", (v) => fmt.n(v, 3)],
@@ -18,24 +25,32 @@ const MEAS: [string, string, (v: number) => string][] = [
 type Cell = { zx: number; zy: number; a: number; b: number; lg: number; att: number; leak: number; mis: number; low: boolean };
 
 export default function Matchup() {
-  const [ds, setDs] = useParam("ds", "wyscout:GB1:2017");
-  const [measure, setMeasure] = useParam("m", "xt_added");
+  const sets = useQuery(`select * from (
+      select distinct 'fotmob' as provider, competition_id, season, 0 as o from fm_zones_team
+      union all select distinct provider, competition_id, season, 1 as o from zones_team)
+    order by o, season desc, (competition_id = 'GB1') desc, provider desc, competition_id`);
+  const first = sets.rows[0];
+  const [dsP, setDs] = useParam("ds", "");
+  const ds = dsP || (first ? `${first.provider}:${first.competition_id}:${first.season}` : "wyscout:GB1:2017");
+  const [measure, setMeasure] = useParam("m", "xg");
   const [dir, setDir] = useParam("dir", "ab");
   const [prov, comp, season] = ds.split(":");
-  const w = `provider = ${lit(prov)} and competition_id = ${lit(comp)} and season = ${Number(season)}`;
-  const sets = useQuery(`select distinct provider, competition_id, season from zones_team order by provider desc, season desc, competition_id`);
-  const teams = useQuery(`select z.club_id, coalesce(k.name, z.club_id) as name, sum(z.xg) / any_value(z.matches) as xg_pm, any_value(z.matches) as matches
-                          from zones_team z left join clubs k using (club_id) where ${w} and z.side = 'for' group by all order by xg_pm desc`);
+  const isFm = prov === "fotmob";
+  const table = isFm ? "fm_zones_team" : "zones_team";
+  const w = isFm ? `competition_id = ${lit(comp)} and season = ${Number(season)}` : `provider = ${lit(prov)} and competition_id = ${lit(comp)} and season = ${Number(season)}`;
+  const teams = useQuery(sets.loading ? null : `select z.club_id, coalesce(k.name, z.club_id) as name, sum(z.xg) / any_value(z.matches) as xg_pm, any_value(z.matches) as matches
+                          from ${table} z left join clubs k using (club_id) where ${w} and z.side = 'for' group by all order by xg_pm desc`);
   const [aP, setA] = useParam("a", "");
   const [bP, setB] = useParam("b", "");
   const ids = teams.rows.map((r) => r.club_id);
   const a0 = ids.includes(aP) ? aP : ids[0], b0 = ids.includes(bP) ? bP : ids[1];
   const [att, def] = dir === "ab" ? [a0, b0] : [b0, a0];
   const name = (id?: string) => teams.rows.find((r) => r.club_id === id)?.name ?? id ?? "–";
-  const mm = MEAS.find((m) => m[0] === measure) ?? MEAS[1];
+  const meas = isFm ? FM_MEAS : MEAS;
+  const mm = meas.find((m) => m[0] === measure) ?? meas[0];
 
   const res = useQuery(att && def ? `
-    with z as (select * from zones_team where ${w}),
+    with z as (select * from ${table} where ${w}),
     tm as (select sum(m) m from (select distinct club_id, matches m from z where side = 'for')),
     lg as (select zx, zy, sum(${mm[0]}) / (select m from tm) pm from z where side = 'for' group by all),
     fa as (select zx, zy, sum(${mm[0]}) / any_value(matches) pm from z where club_id = ${lit(att)} and side = 'for' group by all),
@@ -72,16 +87,16 @@ export default function Matchup() {
 
   return (
     <>
-      <PageHead eyebrow={`Pitch matchup · ${LEAGUES[comp] ?? comp} ${seasonLabel(Number(season), comp)} · ${dsLabel(prov)}`}
+      <PageHead eyebrow={`Pitch matchup · ${LEAGUES[comp] ?? comp} ${seasonLabel(Number(season), comp)} · ${srcLabel(prov)}`}
                 title={top[0] ? <>{name(att)}'s best route against {name(def)}: the {zoneName(top[0].zx, top[0].zy)}</> : "Pitch matchup"}
                 lead={<>Where one side's attacking strengths meet the other's defensive leaks. For each 8.75 × 8.5 m zone we compare what the attacking
                   team creates there per match, and what the defending team concedes there, against the league average. Their product is the matchup edge.</>} />
       <div className="filters">
         <Select label="Dataset" value={ds} onChange={(v) => { setDs(v); setA(null); setB(null); }}
-                options={sets.rows.map((r) => [`${r.provider}:${r.competition_id}:${r.season}`, `${LEAGUES[r.competition_id] ?? r.competition_id} ${seasonLabel(r.season, r.competition_id)} · ${dsLabel(r.provider)}`])} />
+                options={sets.rows.map((r) => [`${r.provider}:${r.competition_id}:${r.season}`, `${LEAGUES[r.competition_id] ?? r.competition_id} ${seasonLabel(r.season, r.competition_id)} · ${srcLabel(r.provider)}`])} />
         <Select label="Team A" value={a0 ?? ""} onChange={setA} options={teams.rows.map((r) => [r.club_id, r.name])} />
         <Select label="Team B" value={b0 ?? ""} onChange={setB} options={teams.rows.map((r) => [r.club_id, r.name])} />
-        <Select label="Measure" value={mm[0]} onChange={setMeasure} options={MEAS.map(([k, l]) => [k, l])} />
+        <Select label="Measure" value={mm[0]} onChange={setMeasure} options={meas.map(([k, l]) => [k, l])} />
         <Field label="Direction">
           <Seg options={[["ab", `${name(a0).split(" ")[0]} attacking`], ["ba", `${name(b0).split(" ")[0]} attacking`]]} value={dir as "ab" | "ba"} onChange={setDir} label="Direction" />
         </Field>
@@ -129,8 +144,15 @@ export default function Matchup() {
             </div>
             <div className="c5">
               <Card title="Read this with care" sub={null}>
-                <p className="small ink2">Free event data covers StatsBomb 2015-16 (big five leagues) and its women's seasons, and Wyscout 2017-18 (big five). This is a historical
-                  analysis tool: it shows how two teams of those seasons matched up, not today's sides.</p>
+                {isFm ? (
+                  <p className="small ink2">Current seasons come from FotMob's shot maps: every shot with its location and xG, so the measures are shots, xG and goals
+                    by where the shot was taken. That's the end product of attacks; the full-action measures (xT, receptions, touches) need complete event data,
+                    which free sources only have for StatsBomb 2015-16 and Wyscout 2017-18 (pick a historical dataset above).
+                    Early in a season the zone counts are small, so the shrinkage toward average matters more.</p>
+                ) : (
+                  <p className="small ink2">Free event data covers StatsBomb 2015-16 (big five leagues) and its women's seasons, and Wyscout 2017-18 (big five). This is a historical
+                    analysis tool: it shows how two teams of those seasons matched up, not today's sides. Pick a FotMob dataset above for the current season.</p>
+                )}
                 <p className="small ink2" style={{ marginBottom: 0 }}>Season averages blend opponents and game states; zones with little volume are pulled toward average. "Against" maps are mirrored into
                   the defending team's view. For what actually moves results beyond team strength, see <a href="#/factors">Hidden factors</a>.</p>
               </Card>

@@ -11,6 +11,7 @@ import { Figure } from "../ui/Figure";
 import {
   Card, ClubLink, EntityPicker, Field, FormStrip, Loading, MatchLink, OutcomeBar, PageHead, Seg, Sparkline, Tile, useParam,
 } from "../ui/kit";
+import { useUpcoming } from "./match/upcoming";
 
 const pctChange = (d: number) => `${d >= 0 ? "+" : "−"}${Math.abs((Math.exp(d) - 1) * 100).toFixed(0)}%`;
 
@@ -28,6 +29,12 @@ export default function Predict() {
   const [neutral, setNeutral] = useParam("neutral", "0");
   const [shP, setSh] = useParam("sh", "0");
   const [saP, setSa] = useParam("sa", "0");
+  const upcoming = useUpcoming("true", 10);
+  const pick = (h: string, aw: string) => {
+    const p = new URLSearchParams(window.location.hash.split("?")[1] ?? "");
+    p.set("h", h); p.set("a", aw); p.delete("sh"); p.delete("sa");
+    window.location.hash = `#/predict?${p}`;
+  };
   const hId = hP || defaults[0]?.club_id || "", aId = aP || defaults[1]?.club_id || "";
   const H = byId.get(hId), A = byId.get(aId);
   const sh = Number(shP), sa = Number(saP);
@@ -115,6 +122,18 @@ export default function Predict() {
           <Field label="Away team"><EntityPicker kind="team" value={A?.name} placeholder="Away team" onPick={(e) => setA(e.id)} /></Field>
           <Field label="Venue"><Seg value={neutral} onChange={(v) => setNeutral(v)} label="Venue" options={[["0", "Home ground"], ["1", "Neutral"]]} /></Field>
         </div>
+        {upcoming.rows.length > 0 && (
+          <div className="row" style={{ gap: 6, marginTop: 12 }}>
+            <span className="xs muted">Next up:</span>
+            {upcoming.rows.filter((f) => f.home_club && f.away_club).map((f) => (
+              <button key={f.fm_match_id} className={`pill ${f.home_club === hId && f.away_club === aId ? "accent" : ""}`} style={{ cursor: "pointer" }}
+                      title={`${LEAGUES[f.competition_id] ?? f.competition_id} · ${new Date(f.kickoff_utc).toLocaleString("en-GB", { weekday: "short", hour: "2-digit", minute: "2-digit" })}`}
+                      onClick={() => pick(f.home_club, f.away_club)}>
+                {f.home_name} v {f.away_name}
+              </button>
+            ))}
+          </div>
+        )}
         {(hP && !H) || (aP && !A) ? <p className="error" style={{ marginTop: 10 }}>That team has no current rating (only clubs in the eight covered leagues this season are rated).</p> : null}
         {H && A && (
           <div className="grid" style={{ marginTop: 14 }}>

@@ -8,8 +8,9 @@ import {
   ClubLink, DataTable, Empty, Field, LeagueSelect, Loading, MatchLink, OutcomeBar, PageHead, SeasonSelect, Seg, Tile, useDebounced, useParam,
 } from "../ui/kit";
 import { dcProbs, surprise, tvd } from "./match/shared";
+import { UpcomingTable, useUpcoming } from "./match/upcoming";
 
-type View = "all" | "upsets" | "dominant" | "goals" | "disagree";
+type View = "upcoming" | "all" | "upsets" | "dominant" | "goals" | "disagree";
 const VIEWS: [View, string][] = [["all", "By round"], ["upsets", "Biggest upsets"], ["dominant", "Most dominant"],
   ["goals", "Highest scoring"], ["disagree", "Model vs market"]];
 
@@ -21,7 +22,10 @@ export default function Matches() {
   const season = Number(seasonP || latest);
   const [q, setQ] = useParam("q", "");
   const dq = useDebounced(q, 200);
-  const [view, setView] = useParam("view", "all");
+  const [viewP, setView] = useParam("view", "");
+  const up = useUpcoming(`f.competition_id = ${lit(league)} and f.season = ${season}`);
+  const view: View = (viewP || (up.rows.length ? "upcoming" : "all")) as View;
+  const views: [View, string][] = up.rows.length ? [["upcoming", `Upcoming (${up.rows.length})`], ...VIEWS] : VIEWS;
   const nav = useNavigate();
 
   const res = useQuery(`select * from matches where competition_id = ${lit(league)} and season = ${season} and played
@@ -105,7 +109,7 @@ export default function Matches() {
         <LeagueSelect value={league} onChange={(v) => { setLeague(v); setSeason(null); }} leagues={[...SIM_LEAGUES, "MLS1"]} />
         {seasons.rows.length > 0 && <SeasonSelect value={season} onChange={(v) => setSeason(String(v))} seasons={seasons.rows.map((r) => r.season)} comp={league} />}
         <Field label="Team"><input type="search" placeholder="Filter by team" value={q} onChange={(e) => setQ(e.target.value || null)} /></Field>
-        <Field label="View"><Seg options={VIEWS} value={view as View} onChange={(v) => setView(v)} label="View" /></Field>
+        <Field label="View"><Seg options={views} value={view} onChange={(v) => setView(v)} label="View" /></Field>
       </div>
       <Loading state={res} />
       {stats && (
@@ -123,7 +127,15 @@ export default function Matches() {
       <div className="grid">
         <div className="c8">
           <div className="card">
-            {view === "all" ? (
+            {view === "upcoming" ? (
+              up.rows.length ? (
+                <>
+                  <p className="fig-title">Fixtures still to play</p>
+                  <p className="fig-sub">From the league schedule, kick-off in your local time, with our Dixon-Coles forecast from current ratings. Predict opens every score and market.</p>
+                  <UpcomingTable rows={up.rows} group="round" league={false} maxHeight={900} />
+                </>
+              ) : <Empty>No upcoming fixtures loaded for this league-season yet.</Empty>
+            ) : view === "all" ? (
               rows.length ? (
                 <div className="table-wrap" style={{ maxHeight: 900 }}>
                   <table className="data">

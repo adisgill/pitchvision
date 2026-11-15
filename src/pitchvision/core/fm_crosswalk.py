@@ -60,6 +60,10 @@ def _sim(a: str, b: str) -> float:
     )
 
 
+def _has(v) -> bool:
+    return v is not None and not pd.isna(v) and v != 0
+
+
 def clubs(con) -> pd.DataFrame:
     fm = con.execute("""
         select distinct competition_id, season, home_fm_id fm_id, home_name name
@@ -123,7 +127,7 @@ def players(con, club_map: pd.DataFrame) -> pd.DataFrame:
             for t in cand.itertuples():
                 sc = fuzz.token_sort_ratio(norm(r.name), norm(t.name))
                 sc = max(sc, fuzz.partial_ratio(norm(r.name), norm(t.name)) - 5)
-                if r.age and t.yob and abs((r.season + 1 - r.age) - t.yob) > 2:
+                if _has(r.age) and _has(t.yob) and abs((r.season + 1 - r.age) - t.yob) > 2:
                     continue
                 if sc > score:
                     best, score = t.player_id, sc
@@ -133,7 +137,10 @@ def players(con, club_map: pd.DataFrame) -> pd.DataFrame:
             if pool is not None:
                 for t in pool.itertuples():
                     sc = fuzz.token_sort_ratio(norm(r.name), t.n)
-                    yob_ok = not (r.age and t.yob) or abs((r.season + 1 - r.age) - t.yob) <= 1
+                    yob_ok = (
+                        not (_has(r.age) and _has(t.yob))
+                        or abs((r.season + 1 - r.age) - t.yob) <= 1
+                    )
                     if sc >= 92 and yob_ok:
                         hits.append((sc, t.player_id))
             if len({h[1] for h in hits}) == 1:
