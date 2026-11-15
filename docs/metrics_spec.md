@@ -1421,3 +1421,78 @@ of 2017-18 → 2020-21 (domestic leagues plus the Championship); checked on 2021
 - xPass and post-shot xG (6.4, 6.1);
 - the player-projection backtest (7.3);
 - xG-based plus-minus (5.5).
+
+## 12. Additions, Nov 15 (pitch value maps, hidden matchup factors, daily refresh)
+
+*Change, Nov 15 (asked for: "value every part of the pitch that affects a matchup" and "find
+metric impacts almost no one sees"):* two new outputs and a daily operating mode.
+
+### 12.1 Pitch value maps (`metrics/zones.py`)
+
+- **Grid:** 12 x 8 zones of 8.75 m x 8.5 m on the 105 x 68 frame. Every on-ball event of
+  the event-data seasons goes in the zone it starts in; receptions go in the zone a
+  completed pass ends in. Everything is from the acting team's view, attacking left to
+  right.
+- **Measures:** touches, passes and completions, receptions, xT added, VAEP offensive and
+  defensive, shots, xG and goals by shot origin, defensive actions, pressures, turnovers.
+- **Team maps** come in two sides: `for` (the team's own actions) and `against` (its
+  opponents' actions in the same matches, mirrored into the team's view). So "where A
+  creates" and "where B concedes" line up zone by zone. The app's matchup view computes
+  `(A_for / league_for) x (B_against / league_against) - 1` per zone.
+- **Player maps:** the same measures for each player-season (receptions excluded, since
+  the receiver isn't recorded).
+- **Checks:** for and against totals are equal by construction. Zone xG sums to 12,754
+  against 12,751 goals. xG per shot rises toward goal (0.20 in the last column).
+- **Licence:** StatsBomb-derived values are published only as per-zone sums per
+  player-season or team-season. These are aggregates (D20).
+
+### 12.2 Hidden matchup factors (`research/matchup_factors.py`)
+
+- **Sample:** every domestic match in the seven player leagues with a Transfermarkt
+  record, a walk-forward forecast and closing odds, 2017-18 onward: **21,538 matches**.
+- **Outcome:** the home-minus-away points margin, as a residual against two baselines:
+  - our model (the chosen Dixon-Coles blend);
+  - the de-vigged closing line.
+- **Factors (26):** each is computed only from what is known before kickoff, or at line-up
+  time where flagged. They cover:
+  - schedule and fatigue: rest, congestion, European matches before and after, midweek,
+    early kickoffs;
+  - selection: rotation, regulars missing, a red card in the previous match;
+  - coaching: the new-manager window, tenure;
+  - luck and regression: finishing luck, conceding luck, results against market
+    expectation, form;
+  - style: shot and corner dominance, back three, mirrored shapes;
+  - officials and venue: the referee's prior home lean, aggression x strict referee, empty
+    stadiums, crowd fill;
+  - motivation: newly promoted, dead rubbers;
+  - the market: opening-to-closing movement.
+- **Test:** OLS slope with HC1 errors per SD (per unit for 0/1 factors). The discovery
+  seasons are 2017-18 to 2021-22, with Benjamini-Hochberg q < 0.10. The holdout is 2022-23
+  onward, and needs the same sign at p < 0.10. We also report how far the closing line
+  moves with each factor beyond our model.
+- **Result: no factor beats the closing line.**
+  - **Real and priced in, missing from our model:** recent shot dominance (+0.22 points
+    per SD beyond the model), corner dominance (+0.20), regulars not starting (-0.09), form
+    (+0.10), rotation (-0.05) and congestion (+0.07). These are the candidates for a richer
+    forecast model (a Phase 2 item: adding them changes the forecast, so it needs its own
+    walk-forward test).
+  - **Empty stadiums:** home advantage fell by 0.21 points. It is real, but there are no
+    holdout cases.
+  - **Did not replicate:** results against market expectation (the over-reaction test),
+    finishing luck, rest days, back three, dead rubbers, crowd fill.
+  - **No detectable effect:** the new-manager bounce, the referee's home lean, the previous
+    red card, European matches, mirrored formations, early kickoffs, midweek, promoted
+    sides, tenure, conceding luck, aggression x strict referee.
+
+### 12.3 Daily operations
+
+- `pitchvision build --daily` re-runs only what new results change: football-data
+  staging, the crosswalk, team matches, the walk-forward, team ratings, the simulator, win
+  probability, referees and xPoints. Transfermarkt is frozen, and the event-data models
+  cover static seasons.
+- `scripts/daily.ps1` runs the fetch (current season only), the daily build and
+  `demo --publish`. Each step stops the run on failure.
+- Demo exports are written in sorted order, so a table whose data hasn't changed keeps the
+  same bytes, the same content-hashed name and the same version.
+- The football-data season is now derived from the date (it turns over on 1 July) rather
+  than hard-coded.

@@ -363,6 +363,30 @@ MATCH_CHECKS = [
 ]  # fmt: skip
 
 
+ZONE_CHECKS = [
+    Check("pitch zones: 'for' and 'against' totals agree per measure (relative gap)", """
+        select 'touches' scope,
+               abs(sum(touches) filter (where side = 'for')
+                   - sum(touches) filter (where side = 'against'))
+               / nullif(sum(touches) filter (where side = 'for'), 0) value
+        from metrics.zones_team
+        union all
+        select 'xg', abs(sum(xg) filter (where side = 'for')
+                         - sum(xg) filter (where side = 'against'))
+                     / nullif(sum(xg) filter (where side = 'for'), 0)
+        from metrics.zones_team""", 1e-9, higher_is_better=False),
+    Check("pitch zones: shot xG within 2% of goals (all event seasons)", """
+        select 'all' scope, abs(sum(xg) / sum(goals) - 1) value
+        from metrics.zones_team where side = 'for'""", 0.02, higher_is_better=False),
+    Check("pitch zones: xG per shot higher in the final zone column than midfield", """
+        select 'all' scope,
+               (sum(xg) filter (where zx = 11) / sum(shots) filter (where zx = 11))
+               - (sum(xg) filter (where zx between 4 and 7)
+                  / sum(shots) filter (where zx between 4 and 7)) value
+        from metrics.zones_team where side = 'for'""", 0.1),
+]  # fmt: skip
+
+
 def event_checks(prefix: str, provider: str) -> list[Check]:
     issues = (OVERRIDES / "event_known_issues.csv").as_posix()
     return [
@@ -408,6 +432,8 @@ def run(con, checks: list[Check] | None = None) -> pd.DataFrame:
             checks += CAREER_CHECKS
         if has_table(con, "ratings", "player_season_a") and has_table(con, "ratings", "roles"):
             checks += TIER_A_CHECKS
+        if has_table(con, "metrics", "zones_team"):
+            checks += ZONE_CHECKS
     rows = []
     for c in checks:
         df = con.execute(c.sql).df()
