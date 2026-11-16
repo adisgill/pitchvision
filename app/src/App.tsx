@@ -1,8 +1,10 @@
-import { lazy, Suspense, useEffect, useMemo, useState } from "react";
-import { Link, Navigate, NavLink, Route, Routes, useLocation, useNavigate } from "react-router-dom";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
+import { Link, Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import { lit, useManifest, useNewVersion, useQuery } from "./db";
 import { fmt, LEAGUES } from "./lib/format";
 import { Icon } from "./ui/icons";
+
+const Ticker = lazy(() => import("./ui/Ticker"));
 
 const pages = {
   Home: lazy(() => import("./pages/Home")),
@@ -28,35 +30,126 @@ const pages = {
   About: lazy(() => import("./pages/About")),
 };
 
-type NavItem = { to: string; label: string; icon: string; badge?: string };
+type NavItem = { to: string; label: string; icon: string; badge?: string; desc: string };
 export const NAV: { group: string; items: NavItem[] }[] = [
-  { group: "", items: [{ to: "/", label: "Today", icon: "home" }] },
-  { group: "Competitions", items: [
-    { to: "/league", label: "Leagues", icon: "league" },
-    { to: "/matches", label: "Matches", icon: "match" },
-    { to: "/predict", label: "Match predictor", icon: "predict" },
+  { group: "Matchday", items: [
+    { to: "/", label: "Today", icon: "home", desc: "Fixtures, results, title races and movers" },
+    { to: "/matches", label: "Matches", icon: "match", desc: "Every result and fixture, with match centres" },
+    { to: "/predict", label: "Match predictor", icon: "predict", desc: "Any two clubs: every score, every market" },
+    { to: "/league", label: "Leagues", icon: "league", desc: "Tables, ratings and 10,000 simulated seasons" },
   ] },
-  { group: "Players & teams", items: [
-    { to: "/players", label: "Player explorer", icon: "player" },
-    { to: "/compare", label: "Compare", icon: "compare" },
-    { to: "/matchup", label: "Pitch matchup", icon: "pitch" },
-    { to: "/recruit", label: "Recruitment", icon: "target" },
-    { to: "/report", label: "Opposition report", icon: "team" },
+  { group: "Scouting", items: [
+    { to: "/players", label: "Player explorer", icon: "player", desc: "Any metric against any metric" },
+    { to: "/compare", label: "Compare", icon: "compare", desc: "Up to three players on percentile radars" },
+    { to: "/recruit", label: "Recruitment", icon: "target", desc: "Role fits, replacements and value for money" },
+    { to: "/matchup", label: "Pitch matchup", icon: "pitch", desc: "Where one attack meets the other's leaks" },
+    { to: "/report", label: "Opposition report", icon: "team", desc: "A printable pre-match dossier on any club" },
   ] },
   { group: "Business", items: [
-    { to: "/transfers", label: "Transfers", icon: "transfer" },
-    { to: "/market", label: "Market value", icon: "money" },
-    { to: "/managers", label: "Managers", icon: "manager" },
-    { to: "/referees", label: "Referees", icon: "referee" },
+    { to: "/transfers", label: "Transfers", icon: "transfer", desc: "Fees, flows and who overpaid" },
+    { to: "/market", label: "Market value", icon: "money", desc: "What drives a valuation, and the outliers" },
+    { to: "/managers", label: "Managers", icon: "manager", desc: "Results above expectation, by tenure" },
+    { to: "/referees", label: "Referees", icon: "referee", desc: "Real differences, and a lot of noise" },
   ] },
   { group: "Research", items: [
-    { to: "/insights", label: "What wins", icon: "predict", badge: "new" },
-    { to: "/factors", label: "Hidden factors", icon: "factors" },
-    { to: "/lab", label: "Model lab", icon: "lab" },
-    { to: "/accuracy", label: "Accuracy", icon: "target" },
-    { to: "/about", label: "About & data", icon: "info" },
+    { to: "/insights", label: "What wins", icon: "predict", badge: "new", desc: "Which stats predict future points" },
+    { to: "/factors", label: "Hidden factors", icon: "factors", desc: "Overlooked factors tested against the market" },
+    { to: "/lab", label: "Model lab", icon: "lab", desc: "Win probability, xT and score matrices" },
+    { to: "/accuracy", label: "Accuracy", icon: "target", desc: "Every model scored in the open, plus the ledger" },
+    { to: "/about", label: "About & data", icon: "info", desc: "Sources, methods and limits" },
   ] },
 ];
+
+const isActive = (to: string, path: string) => (to === "/" ? path === "/" : path.startsWith(to.split("?")[0]));
+
+/** Top navigation: one button per group, each opening a two-column panel of tools. */
+function NavBar() {
+  const loc = useLocation();
+  const [open, setOpen] = useState<string | null>(null);
+  const timer = useRef<number>();
+  useEffect(() => setOpen(null), [loc.pathname, loc.search]);
+  useEffect(() => {
+    const esc = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(null); };
+    window.addEventListener("keydown", esc);
+    return () => window.removeEventListener("keydown", esc);
+  }, []);
+  const enter = (g: string) => { window.clearTimeout(timer.current); timer.current = window.setTimeout(() => setOpen(g), 90); };
+  const leave = () => { window.clearTimeout(timer.current); timer.current = window.setTimeout(() => setOpen(null), 160); };
+  return (
+    <nav className="navbar" aria-label="Main">
+      {NAV.map((g) => {
+        const act = g.items.some((i) => isActive(i.to, loc.pathname));
+        return (
+          <div key={g.group} className={`navtop ${open === g.group ? "open" : ""} ${act ? "active" : ""}`}
+               onPointerEnter={(e) => { if (e.pointerType === "mouse") enter(g.group); }} onPointerLeave={leave}>
+            <button aria-expanded={open === g.group} onClick={() => setOpen(open === g.group ? null : g.group)}>
+              {g.group}<Icon name="chev" />
+            </button>
+            {open === g.group && (
+              <div className="mega" onPointerEnter={() => window.clearTimeout(timer.current)}>
+                {g.items.map((i) => (
+                  <Link key={i.to} to={i.to} className={isActive(i.to, loc.pathname) ? "active" : ""}>
+                    <Icon name={i.icon} /><b>{i.label}{i.badge && <span className="pill accent">{i.badge}</span>}</b><span>{i.desc}</span>
+                  </Link>
+                ))}
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </nav>
+  );
+}
+
+function Sheet({ onClose }: { onClose: () => void }) {
+  const loc = useLocation();
+  return (
+    <>
+      <div className="sheet-scrim" onClick={onClose} />
+      <div className="sheet" role="dialog" aria-label="Menu">
+        <div className="row between">
+          <Brand />
+          <button className="btn ghost" onClick={onClose} aria-label="Close menu"><Icon name="close" /></button>
+        </div>
+        {NAV.map((g) => (
+          <div key={g.group}>
+            <div className="eyebrow">{g.group}</div>
+            {g.items.map((i) => (
+              <Link key={i.to} to={i.to} onClick={onClose} className={isActive(i.to, loc.pathname) ? "active" : ""}><Icon name={i.icon} />{i.label}</Link>
+            ))}
+          </div>
+        ))}
+      </div>
+    </>
+  );
+}
+
+const Brand = () => (
+  <Link to="/" className="brand" aria-label="pitchvision home">
+    <svg viewBox="0 0 32 32" width="26" height="26" aria-hidden="true">
+      <rect x="1" y="1" width="30" height="30" rx="3" fill="none" stroke="currentColor" strokeWidth="2" />
+      <path d="M16 1v30" stroke="currentColor" strokeWidth="2" />
+      <circle cx="16" cy="16" r="6" fill="none" stroke="currentColor" strokeWidth="2" />
+      <circle cx="16" cy="16" r="2.6" fill="var(--hi)" />
+    </svg>
+    pitch<b>vision</b>
+  </Link>
+);
+
+/** One pointer listener drives the cursor spotlight on every ``.spot`` panel. */
+function useSpotlight() {
+  useEffect(() => {
+    const on = (e: PointerEvent) => {
+      const el = (e.target as HTMLElement)?.closest?.(".spot") as HTMLElement | null;
+      if (!el) return;
+      const r = el.getBoundingClientRect();
+      el.style.setProperty("--mx", `${e.clientX - r.left}px`);
+      el.style.setProperty("--my", `${e.clientY - r.top}px`);
+    };
+    window.addEventListener("pointermove", on, { passive: true });
+    return () => window.removeEventListener("pointermove", on);
+  }, []);
+}
 
 function useTheme() {
   const [theme, setTheme] = useState<string | null>(() => { try { return localStorage.getItem("theme"); } catch { return null; } });
@@ -124,6 +217,7 @@ export default function App() {
   const loc = useLocation();
   const [menu, setMenu] = useState(false);
   const [pal, setPal] = useState(false);
+  useSpotlight();
   useEffect(() => { window.scrollTo(0, 0); setMenu(false); }, [loc.pathname]);
   useEffect(() => {
     const on = (e: KeyboardEvent) => {
@@ -134,77 +228,63 @@ export default function App() {
     window.addEventListener("keydown", on);
     return () => window.removeEventListener("keydown", on);
   }, []);
-  const crumb = useMemo(() => NAV.flatMap((g) => g.items).find((i) => i.to !== "/" && loc.pathname.startsWith(i.to))?.label
-    ?? ({ team: "Team", player: "Player", match: "Match" } as Record<string, string>)[loc.pathname.split("/")[1]] ?? "", [loc.pathname]);
   return (
     <>
       {fresh && <div className="banner" role="status">New data is available. <a href="#" onClick={(e) => { e.preventDefault(); window.location.reload(); }}>Refresh</a></div>}
-      <div className="shell">
-        {menu && <div className="scrim" onClick={() => setMenu(false)} />}
-        <aside className={`sidebar ${menu ? "open" : ""}`} aria-label="Main navigation">
-          <Link to="/" className="brand"><svg viewBox="0 0 32 32" width="26" height="26" aria-hidden="true"><rect width="32" height="32" rx="8" fill="var(--accent)" /><circle cx="16" cy="16" r="6.5" fill="none" stroke="#fff" strokeWidth="2" /><path d="M16 3v26" stroke="#fff" strokeWidth="2" /></svg>pitch<b>vision</b></Link>
-          {NAV.map((g) => (
-            <nav className="nav-group" key={g.group || "top"} aria-label={g.group || "Home"}>
-              {g.group && <div className="eyebrow">{g.group}</div>}
-              {g.items.map((i) => (
-                <NavLink key={i.to} to={i.to} end={i.to === "/"} className={({ isActive }) => `nav-link ${isActive ? "active" : ""}`}>
-                  <Icon name={i.icon} />{i.label}{i.badge && <span className="pill accent">{i.badge}</span>}
-                </NavLink>
-              ))}
-            </nav>
-          ))}
-          <div style={{ marginTop: "auto", paddingTop: "1rem" }} className="xs muted">
-            Results through {fmt.date(manifest?.data_through)}
+      <header className="mast">
+        <Brand />
+        <NavBar />
+        <div className="spacer" />
+        <button className="btn search-trigger" onClick={() => setPal(true)} aria-label="Search (Ctrl+K)">
+          <span className="row" style={{ gap: 6 }}><Icon name="search" size={16} /><span className="label">Players, teams, pages</span></span>
+          <span className="kbd">Ctrl K</span>
+        </button>
+        <button className="btn ghost" onClick={toggle} aria-label={dark ? "Switch to light mode" : "Switch to dark mode"}><Icon name={dark ? "sun" : "moon"} /></button>
+        <a className="btn ghost" href="https://github.com/adisgill/pitchvision" aria-label="Source on GitHub"><Icon name="github" /></a>
+        <button className="btn ghost menu-btn" onClick={() => setMenu(true)} aria-label="Open menu"><Icon name="menu" /></button>
+      </header>
+      <Suspense fallback={<div className="ticker" />}><Ticker /></Suspense>
+      {menu && <Sheet onClose={() => setMenu(false)} />}
+      <main className="main">
+        <Suspense fallback={<div className="loading">Loading</div>}>
+          <div className="route" key={loc.pathname}>
+            <Routes>
+              <Route path="/" element={<pages.Home />} />
+              <Route path="/league" element={<pages.League />} />
+              <Route path="/simulations" element={<Navigate to="/league?tab=simulator" replace />} />
+              <Route path="/matches" element={<pages.Matches />} />
+              <Route path="/match/:id" element={<pages.Match />} />
+              <Route path="/predict" element={<pages.Predict />} />
+              <Route path="/team/:id" element={<pages.Team />} />
+              <Route path="/players" element={<pages.Players />} />
+              <Route path="/player/:id" element={<pages.Player />} />
+              <Route path="/compare" element={<pages.Compare />} />
+              <Route path="/matchup" element={<pages.Matchup />} />
+              <Route path="/recruit" element={<pages.Recruit />} />
+              <Route path="/report" element={<pages.Report />} />
+              <Route path="/transfers" element={<pages.Transfers />} />
+              <Route path="/market" element={<pages.Market />} />
+              <Route path="/managers" element={<pages.Managers />} />
+              <Route path="/referees" element={<pages.Referees />} />
+              <Route path="/factors" element={<pages.Factors />} />
+              <Route path="/insights" element={<pages.Insights />} />
+              <Route path="/lab" element={<pages.Lab />} />
+              <Route path="/accuracy" element={<pages.Accuracy />} />
+              <Route path="/about" element={<pages.About />} />
+              <Route path="*" element={<p>Page not found. <Link to="/">Home</Link></p>} />
+            </Routes>
           </div>
-        </aside>
-        <div style={{ minWidth: 0 }}>
-          <header className="topbar">
-            <button className="btn ghost menu-btn" onClick={() => setMenu(true)} aria-label="Open menu"><Icon name="menu" /></button>
-            <span className="crumbs">{crumb}</span>
-            <div className="spacer" />
-            <button className="btn search-trigger" onClick={() => setPal(true)} aria-label="Search (Ctrl+K)">
-              <span className="row" style={{ gap: 6 }}><Icon name="search" size={16} /><span className="label">Search players, teams…</span></span>
-              <span className="kbd">Ctrl K</span>
-            </button>
-            <button className="btn ghost" onClick={toggle} aria-label={dark ? "Switch to light mode" : "Switch to dark mode"}><Icon name={dark ? "sun" : "moon"} /></button>
-            <a className="btn ghost" href="https://github.com/adisgill/pitchvision" aria-label="Source on GitHub"><Icon name="github" /></a>
-          </header>
-          <main className="main">
-            <Suspense fallback={<div className="loading">Loading…</div>}>
-              <Routes>
-                <Route path="/" element={<pages.Home />} />
-                <Route path="/league" element={<pages.League />} />
-                <Route path="/simulations" element={<Navigate to="/league?tab=simulator" replace />} />
-                <Route path="/matches" element={<pages.Matches />} />
-                <Route path="/match/:id" element={<pages.Match />} />
-                <Route path="/predict" element={<pages.Predict />} />
-                <Route path="/team/:id" element={<pages.Team />} />
-                <Route path="/players" element={<pages.Players />} />
-                <Route path="/player/:id" element={<pages.Player />} />
-                <Route path="/compare" element={<pages.Compare />} />
-                <Route path="/matchup" element={<pages.Matchup />} />
-                <Route path="/recruit" element={<pages.Recruit />} />
-                <Route path="/report" element={<pages.Report />} />
-                <Route path="/transfers" element={<pages.Transfers />} />
-                <Route path="/market" element={<pages.Market />} />
-                <Route path="/managers" element={<pages.Managers />} />
-                <Route path="/referees" element={<pages.Referees />} />
-                <Route path="/factors" element={<pages.Factors />} />
-                <Route path="/insights" element={<pages.Insights />} />
-                <Route path="/lab" element={<pages.Lab />} />
-                <Route path="/accuracy" element={<pages.Accuracy />} />
-                <Route path="/about" element={<pages.About />} />
-                <Route path="*" element={<p>Page not found. <Link to="/">Home</Link></p>} />
-              </Routes>
-            </Suspense>
-          </main>
-          <footer className="footer">
-            pitchvision · open source at <a href="https://github.com/adisgill/pitchvision">github.com/adisgill/pitchvision</a> ·
-            data version {manifest?.version ?? "–"} · StatsBomb (Hudl) open data, Wyscout public dataset (CC BY 4.0), Transfermarkt,
-            football-data.co.uk · <Link to="/about">credits & methods</Link>
-          </footer>
+        </Suspense>
+      </main>
+      <footer className="footer">
+        <Brand />
+        <div>
+          Open source at <a href="https://github.com/adisgill/pitchvision">github.com/adisgill/pitchvision</a> ·
+          results through {fmt.dayYear(manifest?.data_through)} · data version <span className="mono">{manifest?.version ?? "–"}</span><br />
+          StatsBomb (Hudl) open data, Wyscout public dataset (CC BY 4.0), Transfermarkt, FotMob, football-data.co.uk ·{" "}
+          <Link to="/about">credits & methods</Link> · <Link to="/accuracy">public forecast ledger</Link>
         </div>
-      </div>
+      </footer>
       {pal && <Palette onClose={() => setPal(false)} />}
     </>
   );

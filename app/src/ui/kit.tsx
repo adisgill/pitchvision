@@ -103,11 +103,36 @@ export function Tile({ label, value, delta, tone, children }: {
   return (
     <div className="tile">
       <div className="l">{label}</div>
-      <div className="v">{value}</div>
+      <div className="v">{typeof value === "string" || typeof value === "number" ? <CountUp text={String(value)} /> : value}</div>
       {delta && <div className={`d ${tone ?? ""}`}>{delta}</div>}
       {children}
     </div>
   );
+}
+
+/** Rolls the first number in ``text`` up from zero on mount, keeping its decimals,
+ * thousands separators and any prefix/suffix ("0.1983", "48.5k", "€1.2bn", "62%"). */
+export function CountUp({ text, ms = 900 }: { text: string; ms?: number }) {
+  const m = text.match(/^(\D*?)(-?[\d,]*\.?\d+)(.*)$/s);
+  const [t, setT] = useState(m ? 0 : 1);
+  useEffect(() => {
+    if (!m || window.matchMedia("(prefers-reduced-motion: reduce)").matches) { setT(1); return; }
+    let raf = 0;
+    const t0 = performance.now();
+    const step = (now: number) => {
+      const k = Math.min(1, (now - t0) / ms);
+      setT(1 - Math.pow(1 - k, 3));
+      if (k < 1) raf = requestAnimationFrame(step);
+    };
+    raf = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(raf);
+  }, [text]);
+  if (!m || t >= 1) return <>{text}</>;
+  const [, pre, num, post] = m;
+  const dec = (num.split(".")[1] ?? "").length;
+  const v = Number(num.replace(/,/g, "")) * t;
+  const s = num.includes(",") ? v.toLocaleString("en-GB", { minimumFractionDigits: dec, maximumFractionDigits: dec }) : v.toFixed(dec);
+  return <>{pre}{s}{post}</>;
 }
 
 export function Loading({ state }: { state: { loading: boolean; error: string | null; rows?: Row[] } }) {

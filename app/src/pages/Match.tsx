@@ -92,43 +92,60 @@ export default function Match() {
   const starters = (club: string) => lu.rows.filter((l) => l.club_id === club && l.starter)
     .map((l) => ({ name: l.name ?? "?", group: l.position_group, shirt: l.shirt, id: l.player_id, captain: l.captain }));
   const bench = (club: string) => lu.rows.filter((l) => l.club_id === club && !l.starter);
+  const fsr = fs.rows[0]?.match_id === id ? fs.rows[0] : undefined;
+  const xgH: number | null = m.home_xg ?? fsr?.home_expected_goals ?? null;
+  const xgA: number | null = m.away_xg ?? fsr?.away_expected_goals ?? null;
   const subOn = new Map(events.filter((e) => e.type === "substitutions").map((e) => [e.player_in_id, e.minute]));
   const subOff = new Map(events.filter((e) => e.type === "substitutions").map((e) => [e.player_id, e.minute]));
 
   return (
     <>
-      <div className="card" style={{ marginBottom: 16 }}>
-        <div className="eyebrow" style={{ textAlign: "center" }}>{LEAGUES[m.competition_id]} · {seasonLabel(m.season, m.competition_id)}{m.round ? ` · ${m.round}` : ""} · {fmt.dayYear(m.match_date)}</div>
-        <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) auto minmax(0,1fr)", gap: 16, alignItems: "center", margin: "14px 0 10px" }}>
+      <div className="scoreboard">
+        <div className="sb-top">
+          <span>{LEAGUES[m.competition_id]} · {seasonLabel(m.season, m.competition_id)}{m.round ? ` · ${m.round}` : ""}</span>
+          <span>{fmt.dayYear(m.match_date)}{m.home_goals_ht != null ? " · full time" : ""}</span>
+        </div>
+        <div className="sb-main">
           <div style={{ textAlign: "right" }}>
-            <div style={{ fontSize: "clamp(1.1rem, 3.2vw, 1.9rem)", fontWeight: 700, letterSpacing: "-0.02em" }}><ClubLink id={m.home_club} name={m.home_team} /></div>
-            <div className="small muted">{m.home_manager ?? ""}{m.home_formation ? ` · ${m.home_formation}` : ""}</div>
-          </div>
-          <div style={{ textAlign: "center" }}>
-            <div className="hero-num" style={{ fontSize: "clamp(2rem, 7vw, 3.4rem)" }}>{fmt.n(m.home_goals)}–{fmt.n(m.away_goals)}</div>
-            {m.home_goals_ht != null && <div className="small muted">HT {m.home_goals_ht}–{m.away_goals_ht}</div>}
+            <div className="team"><ClubLink id={m.home_club} name={m.home_team} /></div>
+            <div className="team-meta">{m.home_manager ?? ""}{m.home_formation ? ` · ${m.home_formation}` : ""}</div>
           </div>
           <div>
-            <div style={{ fontSize: "clamp(1.1rem, 3.2vw, 1.9rem)", fontWeight: 700, letterSpacing: "-0.02em" }}><ClubLink id={m.away_club} name={m.away_team} /></div>
-            <div className="small muted">{m.away_manager ?? ""}{m.away_formation ? ` · ${m.away_formation}` : ""}</div>
+            <div className="score" aria-label={`Score ${m.home_goals} to ${m.away_goals}`}><span>{fmt.n(m.home_goals)}</span><span>{fmt.n(m.away_goals)}</span></div>
+            {m.home_goals_ht != null && <div className="ht">HT {m.home_goals_ht}–{m.away_goals_ht}</div>}
+          </div>
+          <div>
+            <div className="team"><ClubLink id={m.away_club} name={m.away_team} /></div>
+            <div className="team-meta">{m.away_manager ?? ""}{m.away_formation ? ` · ${m.away_formation}` : ""}</div>
           </div>
         </div>
-        <div className="row small muted" style={{ justifyContent: "center", gap: "0.4rem 1.2rem" }}>
-          {m.stadium && <span>{m.stadium}</span>}
-          {m.attendance != null && <span>{fmt.n(m.attendance)} attendance{m.capacity ? ` (${fmt.pct(m.attendance / m.capacity)} full)` : ""}</span>}
-          {m.referee && <span>Referee {m.referee}</span>}
-        </div>
+        {xgH != null && xgA != null && (
+          <div className="xgbar" title="Expected goals from shot quality">
+            <span>xG {fmt.n(xgH, 2)}</span>
+            <div className="tr">
+              <span style={{ flex: Math.max(0.05, xgH), background: "var(--s1)" }} />
+              <span style={{ flex: Math.max(0.05, xgA), background: "var(--s2)", transformOrigin: "right" }} />
+            </div>
+            <span>{fmt.n(xgA, 2)} xG</span>
+          </div>
+        )}
         {goals.length > 0 && (
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginTop: 12 }} className="small">
-            {[m.home_club, m.away_club].map((c, side) => (
-              <div key={c} style={{ textAlign: side === 0 ? "right" : "left" }}>
+          <div className="scorers">
+            {[m.home_club, m.away_club].map((c) => (
+              <div key={c}>
                 {goals.filter((g) => g.club_id === c).map((g, i) => (
-                  <div key={i}>{g.name ?? "?"} {g.minute}'{g.is_penalty ? " (pen)" : ""}{g.is_own_goal ? " (og)" : ""}</div>
+                  <div key={i}>{g.name ?? "?"} <span className="mono xs">{g.minute}'</span>{g.is_penalty ? " (pen)" : ""}{g.is_own_goal ? " (og)" : ""}</div>
                 ))}
               </div>
             ))}
           </div>
         )}
+        <div className="sb-foot">
+          {m.stadium && <span>{m.stadium}</span>}
+          {m.attendance != null && <span>{fmt.n(m.attendance)} attendance{m.capacity ? ` (${fmt.pct(m.attendance / m.capacity)} full)` : ""}</span>}
+          {m.referee && <span>Referee {m.referee}</span>}
+          {m.mkt_h != null && <span>Market before kickoff {fmt.pct(m.mkt_h)} / {fmt.pct(m.mkt_d)} / {fmt.pct(m.mkt_a)}</span>}
+        </div>
       </div>
 
       <div className="grid">
