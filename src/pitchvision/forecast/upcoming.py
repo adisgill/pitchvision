@@ -11,8 +11,8 @@
   FotMob-era match with known results; ``walk_forward_check`` scores this exact set out of
   sample.
 * **Ledger:** ``append_ledger`` adds one row per fixture per day before kickoff to
-  ``data/ledger/predictions.csv``. Rows are never rewritten; a fixture can collect several
-  rows, and the scorecard grades the last one made before kickoff.
+  ``ledger/predictions.csv`` (committed daily). Rows are never rewritten; a fixture can
+  collect several rows, and the scorecard grades the last one made before kickoff.
 """
 
 from __future__ import annotations

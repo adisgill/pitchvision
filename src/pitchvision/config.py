@@ -49,3 +49,7 @@ def get_paths() -> Paths:
     if not data.is_absolute():
         data = REPO_ROOT / data
     return Paths(data=data)
+
+
+# The public forecast ledger lives in the repository (committed daily, append-only).
+LEDGER = REPO_ROOT / "ledger" / "predictions.csv"

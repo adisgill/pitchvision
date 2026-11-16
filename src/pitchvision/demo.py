@@ -20,7 +20,7 @@ import tempfile
 from datetime import UTC, datetime
 from pathlib import Path
 
-from pitchvision.config import REPO_ROOT, get_paths
+from pitchvision.config import LEDGER, REPO_ROOT, get_paths
 from pitchvision.db import connect, has_table
 
 OUT = REPO_ROOT / "app" / "public" / "data"
@@ -381,7 +381,7 @@ def build(publish_dir: Path = OUT) -> dict:
             if has_table(con, "core", "team_matches")
             else None
         )
-        led = paths.data / "ledger" / "predictions.csv"
+        led = LEDGER
         if led.exists() and has_table(con, "stg", "fm_fixtures"):
             tmp = publish_dir / "ledger.parquet"
             con.execute(f"""copy (
