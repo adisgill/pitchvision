@@ -4,7 +4,7 @@
 import { ReactNode, useRef } from "react";
 import { Row } from "../../db";
 import { fmt, LEAGUES, POSITION_NAMES, seasonLabel } from "../../lib/format";
-import { ClubLink, CountUp } from "../../ui/kit";
+import { ClubLink } from "../../ui/kit";
 import { ShareButton } from "../../ui/share";
 import { DIMS, useFmPercentiles } from "./fotmob";
 
@@ -65,7 +65,7 @@ export default function ScoutCard({ id, bio, latest, age, extra }: {
           </div>
           <div className="sc-value">
             <span className="eyebrow">Market value</span>
-            <b>{latest.market_value ? <CountUp text={fmt.eur(latest.market_value)} /> : bio.market_value_in_eur ? fmt.eur(bio.market_value_in_eur) : "–"}</b>
+            <b>{latest.market_value ? fmt.eur(latest.market_value) : bio.market_value_in_eur ? fmt.eur(bio.market_value_in_eur) : "–"}</b>
           </div>
         </div>
       </div>

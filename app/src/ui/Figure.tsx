@@ -3,20 +3,62 @@
 // PNG / SVG export with a small watermark. Plot's pointer-driven tip mark supplies hover.
 import * as Plot from "@observablehq/plot";
 import { toPng, toSvg } from "html-to-image";
-import { ReactNode, useEffect, useRef, useState } from "react";
+import { ReactNode, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Row } from "../db";
 import { css } from "../lib/format";
 
+/** The element's content width, measured before the first paint (so charts never draw at a
+ * guessed width and then jump) and kept current with a ResizeObserver. */
 export function useWidth<T extends HTMLElement>() {
   const ref = useRef<T>(null);
-  const [w, setW] = useState(640);
-  useEffect(() => {
+  const [w, setW] = useState(0);
+  useLayoutEffect(() => {
     if (!ref.current) return;
-    const ro = new ResizeObserver((e) => setW(Math.max(260, Math.floor(e[0].contentRect.width))));
+    setW(Math.max(260, Math.floor(ref.current.getBoundingClientRect().width)));
+    let raf = 0;
+    const ro = new ResizeObserver((e) => {
+      const nw = Math.max(260, Math.floor(e[0].contentRect.width));
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => setW((old) => (Math.abs(old - nw) > 1 ? nw : old)));
+    });
     ro.observe(ref.current);
-    return () => ro.disconnect();
+    return () => { ro.disconnect(); cancelAnimationFrame(raf); };
   }, []);
-  return [ref, w] as const;
+  return [ref, w || 640, w > 0] as const;
+}
+
+const cleanLabel = (l: unknown) =>
+  typeof l === "string" ? l.replace(/^\s*[↑↓←→]\s*/, "").replace(/\s*[↑↓←→]\s*$/, "") : l;
+
+/** House style for every Plot chart: no tick marks or axis arrows, the y label above the axis,
+ * horizontal grid only, room at the top for the label. Page options win where they're set. */
+function polish(o: Record<string, any>): Record<string, any> {
+  const axis = (s: any, y: boolean) => {
+    const base: Record<string, any> = { tickSize: 0, tickPadding: y ? 8 : 6, labelArrow: "none" };
+    if (y) Object.assign(base, { labelAnchor: "top" });
+    if (s == null) return base;
+    return { ...base, ...s, label: cleanLabel(s.label) };
+  };
+  const hasYLabel = o.y?.label != null && o.y?.label !== "";
+  return {
+    ...o,
+    marginTop: o.marginTop ?? (hasYLabel ? 32 : 16),
+    marginBottom: o.marginBottom ?? (o.x?.label ? 40 : 28),
+    x: axis(o.x, false),
+    y: axis(o.y, true),
+  };
+}
+
+/** Hide direct labels that would overprint an earlier one (earlier marks win). */
+function declutter(svg: Element) {
+  const placed: DOMRect[] = [];
+  svg.querySelectorAll('g[aria-label="text"] text').forEach((t) => {
+    const b = (t as SVGGraphicsElement).getBoundingClientRect();
+    if (!b.width) return;
+    const hit = placed.some((p) => b.left < p.right + 2 && b.right > p.left - 2 && b.top < p.bottom + 1 && b.bottom > p.top - 1);
+    if (hit) (t as SVGElement).style.display = "none";
+    else placed.push(b);
+  });
 }
 
 export type TableSpec = { rows: Row[]; cols: [string, string, ((v: any) => string)?][] };
@@ -36,13 +78,13 @@ export function Figure(props: {
   /** Called with the chart's SVG element after each render (for linked highlighting). */
   onRender?: (el: SVGSVGElement | HTMLElement) => void;
 }) {
-  const [ref, width] = useWidth<HTMLDivElement>();
+  const [ref, width, measured] = useWidth<HTMLDivElement>();
   const box = useRef<HTMLDivElement>(null);
   const frame = useRef<HTMLDivElement>(null);
   const [showTable, setShowTable] = useState(false);
   useEffect(() => {
-    if (!props.plot || !box.current || showTable) return;
-    const opts = props.plot(width);
+    if (!props.plot || !box.current || showTable || !measured) return;
+    const opts = polish(props.plot(width));
     const el = Plot.plot({
       style: { background: "transparent", color: css("--text-2"), fontSize: "11.5px", fontFamily: "var(--font)", overflow: "visible" },
       ...(opts as Plot.PlotOptions),
@@ -50,9 +92,10 @@ export function Figure(props: {
     el.setAttribute("role", "img");
     if (props.alt) el.setAttribute("aria-label", props.alt);
     box.current.replaceChildren(el);
+    declutter(el);
     props.onRender?.(el as any);
     return () => { el.remove(); };
-  }, [props.plot, width, showTable]);
+  }, [props.plot, width, showTable, measured]);
   const save = async (kind: "png" | "svg") => {
     if (!frame.current) return;
     const opts = { backgroundColor: css("--surface"), pixelRatio: 2, filter: (n: HTMLElement) => !n.classList?.contains("fig-actions") };

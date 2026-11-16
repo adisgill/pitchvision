@@ -81,12 +81,12 @@ export default function XgPad({ model, value, rho, home, away, onChange }: {
                                       strokeDasharray={l.label === "even" ? undefined : "3 3"} opacity={0.8} pointerEvents="none" />)}
         {[0, 1, 2, 3, 4].map((t) => (
           <g key={t} pointerEvents="none">
-            <text x={px(t)} y={8 + S + 14} textAnchor="middle" fontSize={10} fontFamily="var(--mono)" fill="var(--muted)">{t}</text>
-            <text x={pad - 6} y={py(t) + 3} textAnchor="end" fontSize={10} fontFamily="var(--mono)" fill="var(--muted)">{t}</text>
+            <text x={px(t)} y={8 + S + 14} textAnchor="middle" fontSize={10} fontFamily="var(--font)" fill="var(--muted)">{t}</text>
+            <text x={pad - 6} y={py(t) + 3} textAnchor="end" fontSize={10} fontFamily="var(--font)" fill="var(--muted)">{t}</text>
           </g>
         ))}
-        <text x={pad + S / 2} y={H - 2} textAnchor="middle" fontSize={10.5} fontFamily="var(--mono)" fill="var(--text-2)">{home} expected goals →</text>
-        <text x={10} y={8 + S / 2} textAnchor="middle" fontSize={10.5} fontFamily="var(--mono)" fill="var(--text-2)" transform={`rotate(-90 10 ${8 + S / 2})`}>{away} expected goals →</text>
+        <text x={pad + S / 2} y={H - 2} textAnchor="middle" fontSize={10.5} fontFamily="var(--font)" fill="var(--text-2)">{home} expected goals →</text>
+        <text x={10} y={8 + S / 2} textAnchor="middle" fontSize={10.5} fontFamily="var(--font)" fill="var(--text-2)" transform={`rotate(-90 10 ${8 + S / 2})`}>{away} expected goals →</text>
         {/* the model's pick */}
         <circle cx={px(model.lh)} cy={py(model.la)} r={9} fill="none" stroke="var(--text)" strokeWidth={1.5} strokeDasharray={moved ? "2 2" : undefined} pointerEvents="none" />
         {moved && <line x1={px(model.lh)} y1={py(model.la)} x2={px(value.lh)} y2={py(value.la)} stroke="var(--text)" strokeWidth={1} strokeDasharray="2 3" pointerEvents="none" />}

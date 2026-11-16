@@ -54,18 +54,18 @@ function River({ shots, t, end, setT, home, away }: {
         {[0, 15, 30, 45, 60, 75, 90].filter((m) => m <= end).map((m) => (
           <g key={m}>
             <line x1={x(m)} x2={x(m)} y1={6} y2={H - 6} stroke="var(--grid)" />
-            <text x={x(m)} y={H + 12} textAnchor="middle" fontSize={10} fontFamily="var(--mono)" fill="var(--muted)">{m === 45 ? "HT" : `${m}'`}</text>
+            <text x={x(m)} y={H + 12} textAnchor="middle" fontSize={10} fontFamily="var(--font)" fill="var(--muted)">{m === 45 ? "HT" : `${m}'`}</text>
           </g>
         ))}
         <path d={area(hs.pts, 1)} fill="var(--s1)" fillOpacity={0.85} />
         <path d={area(as.pts, -1)} fill="var(--s2)" fillOpacity={0.85} />
         <line x1={left} x2={width - right} y1={mid} y2={mid} stroke="var(--surface)" strokeWidth={2} />
-        <text x={left - 6} y={16} textAnchor="end" fontSize={10} fontFamily="var(--mono)" fill="var(--muted)">{fmt.n(maxX, 1)}</text>
-        <text x={left - 6} y={H - 8} textAnchor="end" fontSize={10} fontFamily="var(--mono)" fill="var(--muted)">{fmt.n(maxX, 1)}</text>
+        <text x={left - 6} y={16} textAnchor="end" fontSize={10} fontFamily="var(--font)" fill="var(--muted)">{fmt.n(maxX, 1)}</text>
+        <text x={left - 6} y={H - 8} textAnchor="end" fontSize={10} fontFamily="var(--font)" fill="var(--muted)">{fmt.n(maxX, 1)}</text>
         <text x={0} y={mid - 22} fontSize={10.5} fontWeight={650} fill="var(--text)">{home.length > 16 ? home.slice(0, 15) + "…" : home}</text>
-        <text x={0} y={mid - 8} fontSize={10} fontFamily="var(--mono)" fill="var(--muted)">xG {fmt.n(hs.total, 2)} ↑</text>
+        <text x={0} y={mid - 8} fontSize={10} fontFamily="var(--font)" fill="var(--muted)">xG {fmt.n(hs.total, 2)} ↑</text>
         <text x={0} y={mid + 16} fontSize={10.5} fontWeight={650} fill="var(--text)">{away.length > 16 ? away.slice(0, 15) + "…" : away}</text>
-        <text x={0} y={mid + 30} fontSize={10} fontFamily="var(--mono)" fill="var(--muted)">xG {fmt.n(as.total, 2)} ↓</text>
+        <text x={0} y={mid + 30} fontSize={10} fontFamily="var(--font)" fill="var(--muted)">xG {fmt.n(as.total, 2)} ↓</text>
         {goals.map((g, i) => {
           const scorerHome = g.own_goal ? !g.home : g.home;
           return (
@@ -154,7 +154,7 @@ export default function ShotPlayback({ rows, m }: { rows: Row[]; m: Row }) {
                        <div className="muted">{[s.situation, s.shot_type].filter(Boolean).join(" · ")}{s.xgot != null && s.on_target ? ` · xGOT ${fmt.n(s.xgot, 2)}` : ""}</div></>)}
                      onPointerLeave={tip.hide}>
                     {fresh && <circle r={r} className="pb-ping" fill="none" stroke={c} strokeWidth={0.5} />}
-                    <circle r={r} fill={s.goal ? c : "var(--pitch)"} fillOpacity={s.goal ? 1 : 0.55} stroke={c} strokeWidth={s.goal ? 0.6 : 0.45}
+                    <circle r={r} fill={c} fillOpacity={s.goal ? 1 : 0.22} stroke={s.goal ? "var(--surface)" : c} strokeWidth={s.goal ? 0.5 : 0.4}
                             className="pb-shot" />
                   </g>
                 );

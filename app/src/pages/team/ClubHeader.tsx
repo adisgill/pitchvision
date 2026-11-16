@@ -52,7 +52,7 @@ function Trend({ games, name }: { games: Row[]; name: string }) {
         </defs>
         {ticks.map((t) => <g key={t}>
           <line x1={left} x2={W - right} y1={y(t)} y2={y(t)} stroke="var(--grid)" />
-          <text x={left - 6} y={y(t) + 3} textAnchor="end" fontSize={10} fontFamily="var(--mono)" fill="var(--muted)">{t}</text>
+          <text x={left - 6} y={y(t) + 3} textAnchor="end" fontSize={10} fontFamily="var(--font)" fill="var(--muted)">{t}</text>
         </g>)}
         <path d={band} fill="var(--pos)" opacity={0.18} clipPath={`url(#${uid}a)`} />
         <path d={band} fill="var(--neg)" opacity={0.18} clipPath={`url(#${uid}b)`} />
@@ -63,7 +63,7 @@ function Trend({ games, name }: { games: Row[]; name: string }) {
         <text x={x(n - 1) + 8} y={y(last.cx) + (ahead ? 12 : -2)} fontSize={10} fill="var(--muted)">{fmt.n(last.cx, 1)} exp.</text>
         {/* xG difference strip */}
         <line x1={left} x2={W - right} y1={H + S / 2} y2={H + S / 2} stroke="var(--axis)" />
-        <text x={left - 6} y={H + S / 2 + 3} textAnchor="end" fontSize={9} fontFamily="var(--mono)" fill="var(--muted)">xGD</text>
+        <text x={left - 6} y={H + S / 2 + 3} textAnchor="end" fontSize={9} fontFamily="var(--font)" fill="var(--muted)">xGD</text>
         {rows.map((r) => r.xd != null && (
           <rect key={r.match_id} x={x(r.i) - bw / 2} width={bw} rx={1}
                 y={r.xd >= 0 ? H + S / 2 - (r.xd / xdMax) * (S / 2 - 3) : H + S / 2}

@@ -4,8 +4,6 @@ import { HashRouter } from "react-router-dom";
 import App from "./App";
 import "@fontsource/barlow-condensed/600.css";
 import "@fontsource/barlow-condensed/700.css";
-import "@fontsource/jetbrains-mono/400.css";
-import "@fontsource/jetbrains-mono/500.css";
 import "./theme.css";
 
 // After a new deploy, an open tab still points at the old content-hashed chunks, which are gone:

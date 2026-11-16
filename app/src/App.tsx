@@ -136,20 +136,6 @@ const Brand = () => (
   </Link>
 );
 
-/** One pointer listener drives the cursor spotlight on every ``.spot`` panel. */
-function useSpotlight() {
-  useEffect(() => {
-    const on = (e: PointerEvent) => {
-      const el = (e.target as HTMLElement)?.closest?.(".spot") as HTMLElement | null;
-      if (!el) return;
-      const r = el.getBoundingClientRect();
-      el.style.setProperty("--mx", `${e.clientX - r.left}px`);
-      el.style.setProperty("--my", `${e.clientY - r.top}px`);
-    };
-    window.addEventListener("pointermove", on, { passive: true });
-    return () => window.removeEventListener("pointermove", on);
-  }, []);
-}
 
 function useTheme() {
   const [theme, setTheme] = useState<string | null>(() => { try { return localStorage.getItem("theme"); } catch { return null; } });
@@ -217,7 +203,6 @@ export default function App() {
   const loc = useLocation();
   const [menu, setMenu] = useState(false);
   const [pal, setPal] = useState(false);
-  useSpotlight();
   useEffect(() => { window.scrollTo(0, 0); setMenu(false); }, [loc.pathname]);
   useEffect(() => {
     const on = (e: KeyboardEvent) => {

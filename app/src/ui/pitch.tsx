@@ -11,7 +11,7 @@ export const ZW = L / NX, ZH = W / NY;
 export function Pitch({ children, overlay, vertical, half, label }: {
   children?: ReactNode; overlay?: ReactNode; vertical?: boolean; half?: boolean; label?: string;
 }) {
-  const line = { stroke: "var(--pitch-line)", strokeWidth: 0.35, fill: "none" };
+  const line = { stroke: "var(--pitch-line)", strokeWidth: 0.3, fill: "none" };
   const x0 = half ? L / 2 - 2 : -2;
   const vb = vertical ? `-2 ${x0} ${W + 4} ${L - x0 + 2}` : `${x0} -2 ${L - x0 + 2} ${W + 4}`;
   const tr = vertical ? `translate(0 ${L}) rotate(-90) translate(0 0)` : `translate(0 ${W}) scale(1 -1)`;
@@ -20,6 +20,10 @@ export function Pitch({ children, overlay, vertical, half, label }: {
       <svg viewBox={vb} role="img" aria-label={label ?? "Football pitch"}>
         <rect x={-2} y={-2} width={(vertical ? W : L) + 4} height={(vertical ? L : W) + 4} fill="var(--pitch)" />
         <g transform={vertical ? `translate(0 ${L}) rotate(-90)` : tr}>
+          {/* mown stripes: twelve bands across the length, barely there */}
+          {Array.from({ length: 12 }, (_, i) => i % 2 === 0 && (
+            <rect key={i} x={(i * L) / 12} y={0} width={L / 12} height={W} fill="var(--pitch-stripe)" pointerEvents="none" />
+          ))}
           {children}
           <g {...line} pointerEvents="none">
             <rect x={0} y={0} width={L} height={W} />

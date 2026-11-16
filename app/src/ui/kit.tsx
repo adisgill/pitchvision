@@ -103,7 +103,7 @@ export function Tile({ label, value, delta, tone, children }: {
   return (
     <div className="tile">
       <div className="l">{label}</div>
-      <div className="v">{typeof value === "string" || typeof value === "number" ? <CountUp text={String(value)} /> : value}</div>
+      <div className="v">{value}</div>
       {delta && <div className={`d ${tone ?? ""}`}>{delta}</div>}
       {children}
     </div>
