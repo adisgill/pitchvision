@@ -235,6 +235,37 @@ TABLES: dict[str, str] = {
         left join (select distinct player_fm_id, player_id from core.fm_players) p
           on p.player_fm_id = m.player_fm_id
         where x.match_id is not null""",
+    "fm_team_situations": """
+        select c.club_id, s.competition_id, s.season, 'for' side, s.situation,
+               count(*) shots, sum(s.xg) xg, sum(s.goal::int) goals
+        from stg.fm_shots s join core.fm_clubs c on c.competition_id = s.competition_id
+             and c.season = s.season and c.fm_id = s.team_fm_id
+        where not s.own_goal group by all
+        union all
+        select c.club_id, s.competition_id, s.season, 'against', s.situation,
+               count(*), sum(s.xg), sum(s.goal::int)
+        from stg.fm_shots s join stg.fm_matches m using (fm_match_id)
+        join core.fm_clubs c on c.competition_id = s.competition_id and c.season = s.season
+             and c.fm_id = case when s.team_fm_id = m.home_fm_id then m.away_fm_id
+                                else m.home_fm_id end
+        where not s.own_goal group by all""",
+    "fm_unavailable": """
+        select x.match_id, x.fm_match_id, x.kickoff_utc, c.club_id, u.competition_id, u.season,
+               coalesce(p.player_id, 'fm-' || u.player_fm_id) player_id, u.name, u.type,
+               u.expected_return, u.market_value, u.age
+        from stg.fm_unavailable u join core.fm_matches_xw x using (fm_match_id)
+        left join core.fm_clubs c on c.competition_id = u.competition_id
+             and c.season = u.season and c.fm_id = u.team_fm_id
+        left join (select distinct player_fm_id, player_id from core.fm_players) p
+          on p.player_fm_id = u.player_fm_id""",
+    "fm_weather": """select x.match_id, w.* exclude (fm_match_id) from stg.fm_weather w
+                     join core.fm_matches_xw x using (fm_match_id) where x.match_id is not null""",
+    "ww_drivers": "select * from research.ww_drivers",
+    "ww_stability": "select * from research.ww_stability",
+    "ww_curves": "select * from research.ww_curves",
+    "ww_fm_factors": "select * from research.fm_factors",
+    "ww_fm_factor_bins": "select * from research.fm_factor_bins",
+    "ww_weather_goals": "select * from research.fm_weather_goals",
     "matchup_factors": "select * from research.matchup_factors",
     "matchup_factor_bins": "select * from research.matchup_factor_bins",
     "timelines": """
@@ -293,6 +324,10 @@ def build(publish_dir: Path = OUT) -> dict:
         for name, sql in TABLES.items():
             fm = name.startswith("fm_") or name == "fixtures"
             if fm and not has_table(con, "metrics", "fm_player_season"):
+                continue
+            src = {"ww_fm_factors": "fm_factors", "ww_fm_factor_bins": "fm_factor_bins",
+                   "ww_weather_goals": "fm_weather_goals"}.get(name, name)  # fmt: skip
+            if name.startswith("ww_") and not has_table(con, "research", src):
                 continue
             sql = (sql.replace("{XW_PLAYER}", XW_PLAYER).replace("{XW_CLUB}", XW_CLUB)
                    .replace("{LAMBDAS}", lambdas))  # fmt: skip

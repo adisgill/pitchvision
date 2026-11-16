@@ -71,7 +71,7 @@ def _num(v):
 
 def match_tables(root: Path) -> dict[str, pd.DataFrame]:
     out: dict[str, list] = {k: [] for k in ("matches", "shots", "players", "pstats", "tstats",
-                                             "events")}  # fmt: skip
+                                             "events", "weather", "unavailable")}  # fmt: skip
     for p in sorted((root / "matches").glob("*/*/*.html.gz")):
         comp, season = p.parent.parent.name, int(p.parent.name)
         try:
@@ -101,6 +101,24 @@ def match_tables(root: Path) -> dict[str, pd.DataFrame]:
             "away_coach": (at.get("coach") or {}).get("name"),
             "finished": bool(g.get("finished")),
         })  # fmt: skip
+        w = c.get("weather") or {}
+        if w:
+            out["weather"].append({
+                "fm_match_id": mid, "temperature": _num(w.get("temperature")),
+                "wind_speed": _num(w.get("windSpeed")), "humidity": _num(w.get("relativeHumidity")),
+                "precipitation": _num(w.get("precipitation")), "snow": _num(w.get("snow")),
+                "cloud_cover": _num(w.get("cloudCover")), "description": w.get("description"),
+            })  # fmt: skip
+        for side_key, team_id in (("homeTeam", home_id), ("awayTeam", away_id)):
+            for u in (lu.get(side_key) or {}).get("unavailable") or []:
+                ua = u.get("unavailability") or {}
+                out["unavailable"].append({
+                    "fm_match_id": mid, "competition_id": comp, "season": season,
+                    "team_fm_id": team_id, "player_fm_id": u.get("id"), "name": u.get("name"),
+                    "type": ua.get("type"), "injury_id": ua.get("injuryId"),
+                    "expected_return": ua.get("expectedReturn"),
+                    "market_value": _num(u.get("marketValue")), "age": u.get("age"),
+                })  # fmt: skip
         for s in (c.get("shotmap") or {}).get("shots") or []:
             out["shots"].append({
                 "fm_match_id": mid, "competition_id": comp, "season": season,
@@ -190,7 +208,8 @@ def build(con, paths: Paths) -> dict[str, int]:
     mt = match_tables(root)
     tables.update({"fm_matches": mt["matches"], "fm_shots": mt["shots"],
                    "fm_player_match": mt["players"], "fm_player_stats": mt["pstats"],
-                   "fm_team_stats": mt["tstats"], "fm_events": mt["events"]})  # fmt: skip
+                   "fm_team_stats": mt["tstats"], "fm_events": mt["events"],
+                   "fm_weather": mt["weather"], "fm_unavailable": mt["unavailable"]})  # fmt: skip
     for name, df in tables.items():
         if df is None or not len(df):
             continue

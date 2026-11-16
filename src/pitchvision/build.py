@@ -146,6 +146,12 @@ def run(strict: bool = True, daily: bool = False) -> dict:
                 out["fotmob"] = fm_stg.build(con, paths)
                 out["fm_crosswalk"] = fm_crosswalk.build(con, paths)
                 out["fm_metrics"] = fm_metrics.build(con, paths)
+            if has_table(con, "forecast", "wf_predictions"):
+                with stage("research: what wins, skill vs luck, recent-era factors"):
+                    from pitchvision.research import fm_factors, what_wins
+
+                    out["what_wins"] = what_wins.build(con, paths)
+                    out["fm_factors"] = fm_factors.build(con, paths)
         if (
             full
             and has_table(con, "forecast", "wf_predictions")

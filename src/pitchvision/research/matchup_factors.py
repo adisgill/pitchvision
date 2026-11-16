@@ -529,17 +529,19 @@ def _bh(p: np.ndarray) -> np.ndarray:
     return q
 
 
-def analyse(f: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
+def analyse(f: pd.DataFrame, factors: dict | None = None, discovery: tuple = DISCOVERY,
+            holdout_from: int = HOLDOUT_FROM) -> tuple[pd.DataFrame, pd.DataFrame]:  # fmt: skip
+    factors = factors or FACTORS
     rows, bins = [], []
-    for fac, (label, group, known, kind, desc) in FACTORS.items():
+    for fac, (label, group, known, kind, desc) in factors.items():
         d = f.dropna(subset=[fac, "res_model", "res_market"])
         d = d[np.isfinite(d[fac])]
         if len(d) < 300 or d[fac].std() == 0:
             continue
         binary = set(np.unique(d[fac])) <= {-1.0, 0.0, 1.0}
         scale = 1.0 if binary else float(d[fac].std())
-        disc = d[d.season.between(*DISCOVERY)]
-        hold = d[d.season >= HOLDOUT_FROM]
+        disc = d[d.season.between(*discovery)]
+        hold = d[d.season >= holdout_from]
         r = {"factor": fac, "label": label, "group": group, "known_at": known, "kind": kind,
              "description": desc, "unit": "per unit (0/1)" if binary else "per SD",
              "scale": scale, "n": len(d)}  # fmt: skip

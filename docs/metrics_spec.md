@@ -1533,3 +1533,37 @@ scraping WhoScored, FotMob and SofaScore.
   - **The schedule**, with our club ids.
 - **Licence:** we publish only aggregates: player-season and team-match stats, zone sums
   and the fixture list. Raw pages, per-shot rows and per-event coordinates stay local.
+
+### 12.5 What wins: in-match drivers and skill vs luck (`research/what_wins.py`)
+
+*Change, Nov 16 (asked for: "find answers and correlations with this data"):*
+
+- **Sample:** 8,290 FotMob-era league matches (2024-25 onward, nine leagues), each seen from
+  both teams' sides.
+- **Drivers** (descriptive): points beyond the closing line's expectation against each
+  stat's in-match difference. The results are shaped by game state: possession, passes and
+  crosses come out negative and clearances positive, because leading teams sit deeper. The
+  joint model uses five non-collinear stats; the shot stats are too collinear to separate.
+- **Skill vs luck:** split-half reliability (Spearman-Brown) and first-half → second-half
+  predictive r, over 401 team-seasons.
+  - Touches in the opposition box (predictive r 0.67, reliability 0.87) predict as well as
+    xG difference (0.67, 0.81) and goal difference (0.67).
+  - Points predict slightly less well (0.65).
+  - Opposition-half passes and possession are the most stable traits (0.93).
+  - Defensive volume (tackles, interceptions, clearances, blocks, saves) predicts fewer
+    future points (r -0.30 to -0.56).
+  - Set-piece xG has reliability 0.53 within a season.
+
+### 12.6 Recent-era factors: travel, weather, absences (`research/fm_factors.py`)
+
+- **New FotMob fields:**
+  - pre-match unavailability lists: 21.7k records (injury, suspension, international duty)
+    with market values, on 59% of team-matches;
+  - weather at kickoff, from 2025-26 only;
+  - stadium coordinates, which give away travel distance.
+- **Test:** the same method as 12.2. Discovery is 2024-25; the holdout is 2025-26 onward.
+- **Result:** nothing beats the closing line. Injuries are priced by the market (-0.076
+  points per SD of injured value share) but not by our model, which is a forecast-upgrade
+  item.
+- **Candidate, unreplicated:** rain adds goals beyond the market's over/under 2.5 line
+  (+6.7 pp, ±5.1, q = 0.039, n = 3,776, single season). It's re-tested as data accrues.
