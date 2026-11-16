@@ -22,6 +22,12 @@ export const POSITION_NAMES: Record<string, string> = {
 export const seasonLabel = (s: number, comp?: string) =>
   comp === "MLS1" || comp === "NWSL" ? `${s}` : `${s}-${String((s + 1) % 100).padStart(2, "0")}`;
 
+/** Calendar dates are stored as midnight UTC: show them in UTC so they don't slip a day west of
+ * Greenwich. Real kick-off timestamps (any time-of-day) stay in the viewer's local time. */
+const dateZone = (v: any) => {
+  const d = new Date(v);
+  return d.getUTCHours() === 0 && d.getUTCMinutes() === 0 && d.getUTCSeconds() === 0 ? "UTC" : undefined;
+};
 const bad = (v: any) => v == null || (typeof v === "number" && !Number.isFinite(v));
 export const fmt = {
   n: (v: any, d = 0) => (bad(v) ? "–" : Number(v).toLocaleString("en-GB", { minimumFractionDigits: d, maximumFractionDigits: d })),
@@ -33,8 +39,8 @@ export const fmt = {
     return a >= 1e9 ? `€${(v / 1e9).toFixed(2)}bn` : a >= 1e6 ? `€${(v / 1e6).toFixed(a >= 1e8 ? 0 : 1)}m` : a >= 1e3 ? `€${Math.round(v / 1e3)}k` : `€${v}`;
   },
   date: (v: any) => (v ? new Date(v).toISOString().slice(0, 10) : "–"),
-  day: (v: any) => (v ? new Date(v).toLocaleDateString("en-GB", { day: "numeric", month: "short" }) : "–"),
-  dayYear: (v: any) => (v ? new Date(v).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "–"),
+  day: (v: any) => (v ? new Date(v).toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: dateZone(v) }) : "–"),
+  dayYear: (v: any) => (v ? new Date(v).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: dateZone(v) }) : "–"),
   compact: (v: any) => (bad(v) ? "–" : Intl.NumberFormat("en-GB", { notation: "compact", maximumFractionDigits: 1 }).format(v)),
   odds: (p: any) => (bad(p) || p <= 0 ? "–" : (1 / p).toFixed(2)),
 };
