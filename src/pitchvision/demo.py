@@ -225,6 +225,19 @@ TABLES: dict[str, str] = {
                     from stg.fm_events e join core.fm_matches_xw x using (fm_match_id)
                     left join (select distinct player_fm_id, player_id from core.fm_players) p
                       on p.player_fm_id = e.player_fm_id::bigint""",
+    # one row per shot for the match centre's shot map, playback and xG river; sorted by
+    # match_id (order by all) so the browser's range requests read one row group per match
+    "fm_shots": """select x.match_id, s.minute, s.minute_added, s.period,
+                          s.team_fm_id = m.home_fm_id is_home,
+                          coalesce(p.player_id, 'fm-' || s.player_fm_id) player_id, s.player_name,
+                          round(s.x, 2) x, round(s.y, 2) y, round(s.xg, 4) xg,
+                          round(s.xgot, 4) xgot, s.situation, s.shot_type, s.on_target,
+                          s.blocked, s.own_goal, s.goal
+                   from stg.fm_shots s join stg.fm_matches m using (fm_match_id)
+                   join core.fm_matches_xw x using (fm_match_id)
+                   left join (select distinct player_fm_id, player_id from core.fm_players) p
+                     on p.player_fm_id = s.player_fm_id
+                   where x.match_id is not null and s.period <> 'PenaltyShootout'""",
     "fm_lineups": """
         select x.match_id, c.club_id, coalesce(p.player_id, 'fm-' || m.player_fm_id) player_id,
                m.name, m.starter, m.shirt, m.usual_position_id, m.layout_x, m.layout_y,
