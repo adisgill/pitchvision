@@ -155,14 +155,14 @@ TABLES: dict[str, str] = {
                t.home_reds, t.away_reds, t.home_xg, t.away_xg,
                t.proxy_home_xg, t.proxy_away_xg, t.close_home, t.close_draw, t.close_away,
                t.close_source, coalesce(t.referee, g.referee) referee,
-               g.home_manager, g.away_manager, g.home_formation, g.away_formation,
-               g.attendance, g.stadium, g.round,
+               {FM_COLS},
                p.elo_home, p.elo_away, p.elo_h, p.elo_d, p.elo_a, p.mkt_h, p.mkt_d, p.mkt_a,
                {LAMBDAS}
         from core.team_matches t
         left join forecast.wf_predictions p using (match_id)
         left join stg.fd_matches f using (fd_match_id)
-        left join stg.tm_games g on t.match_id = 'tm-' || g.game_id""",
+        left join stg.tm_games g on t.match_id = 'tm-' || g.game_id
+        {FM_JOIN}""",
     "match_events": """
         select 'tm-' || e.game_id match_id, e.minute, e.added, e.type,
                'tm-' || e.club_id club_id, 'tm-' || e.player_id player_id,
@@ -329,8 +329,25 @@ def build(publish_dir: Path = OUT) -> dict:
                    "ww_weather_goals": "fm_weather_goals"}.get(name, name)  # fmt: skip
             if name.startswith("ww_") and not has_table(con, "research", src):
                 continue
+            if has_table(con, "core", "fm_matches_xw"):
+                # Transfermarkt where it has the match (to July 2026), FotMob after that
+                fm_cols = ("coalesce(g.home_manager, fmm.home_coach) home_manager, "
+                           "coalesce(g.away_manager, fmm.away_coach) away_manager, "
+                           "coalesce(g.home_formation, fmm.home_formation) home_formation, "
+                           "coalesce(g.away_formation, fmm.away_formation) away_formation, "
+                           "g.attendance, coalesce(g.stadium, fmm.stadium) stadium, "
+                           "coalesce(g.round, fmm.round) round")  # fmt: skip
+                fm_join = (
+                    "left join core.fm_matches_xw fx on fx.match_id = t.match_id "
+                    "left join stg.fm_matches fmm on fmm.fm_match_id = fx.fm_match_id"
+                )
+            else:
+                fm_cols = ("g.home_manager, g.away_manager, g.home_formation, g.away_formation, "
+                           "g.attendance, g.stadium, g.round")  # fmt: skip
+                fm_join = ""
             sql = (sql.replace("{XW_PLAYER}", XW_PLAYER).replace("{XW_CLUB}", XW_CLUB)
-                   .replace("{LAMBDAS}", lambdas))  # fmt: skip
+                   .replace("{LAMBDAS}", lambdas).replace("{FM_COLS}", fm_cols)
+                   .replace("{FM_JOIN}", fm_join))  # fmt: skip
             tmp = publish_dir / f"{name}.parquet"
             # sorted rows: unchanged data gives identical bytes, so an unchanged table keeps
             # its file name and the version only moves when something really changed

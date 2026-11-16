@@ -15,11 +15,14 @@ const pages = {
   Player: lazy(() => import("./pages/Player")),
   Compare: lazy(() => import("./pages/Compare")),
   Matchup: lazy(() => import("./pages/Matchup")),
+  Recruit: lazy(() => import("./pages/Recruit")),
+  Report: lazy(() => import("./pages/Report")),
   Transfers: lazy(() => import("./pages/Transfers")),
   Market: lazy(() => import("./pages/Market")),
   Managers: lazy(() => import("./pages/Managers")),
   Referees: lazy(() => import("./pages/Referees")),
   Factors: lazy(() => import("./pages/Factors")),
+  Insights: lazy(() => import("./pages/Insights")),
   Lab: lazy(() => import("./pages/Lab")),
   Accuracy: lazy(() => import("./pages/Accuracy")),
   About: lazy(() => import("./pages/About")),
@@ -37,6 +40,8 @@ export const NAV: { group: string; items: NavItem[] }[] = [
     { to: "/players", label: "Player explorer", icon: "player" },
     { to: "/compare", label: "Compare", icon: "compare" },
     { to: "/matchup", label: "Pitch matchup", icon: "pitch" },
+    { to: "/recruit", label: "Recruitment", icon: "target" },
+    { to: "/report", label: "Opposition report", icon: "team" },
   ] },
   { group: "Business", items: [
     { to: "/transfers", label: "Transfers", icon: "transfer" },
@@ -45,7 +50,8 @@ export const NAV: { group: string; items: NavItem[] }[] = [
     { to: "/referees", label: "Referees", icon: "referee" },
   ] },
   { group: "Research", items: [
-    { to: "/factors", label: "Hidden factors", icon: "factors", badge: "new" },
+    { to: "/insights", label: "What wins", icon: "predict", badge: "new" },
+    { to: "/factors", label: "Hidden factors", icon: "factors" },
     { to: "/lab", label: "Model lab", icon: "lab" },
     { to: "/accuracy", label: "Accuracy", icon: "target" },
     { to: "/about", label: "About & data", icon: "info" },
@@ -177,11 +183,14 @@ export default function App() {
                 <Route path="/player/:id" element={<pages.Player />} />
                 <Route path="/compare" element={<pages.Compare />} />
                 <Route path="/matchup" element={<pages.Matchup />} />
+                <Route path="/recruit" element={<pages.Recruit />} />
+                <Route path="/report" element={<pages.Report />} />
                 <Route path="/transfers" element={<pages.Transfers />} />
                 <Route path="/market" element={<pages.Market />} />
                 <Route path="/managers" element={<pages.Managers />} />
                 <Route path="/referees" element={<pages.Referees />} />
                 <Route path="/factors" element={<pages.Factors />} />
+                <Route path="/insights" element={<pages.Insights />} />
                 <Route path="/lab" element={<pages.Lab />} />
                 <Route path="/accuracy" element={<pages.Accuracy />} />
                 <Route path="/about" element={<pages.About />} />
