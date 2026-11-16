@@ -89,7 +89,7 @@ export default function Home() {
         {up.rows.length > 0 && (
           <div className="c12">
             <Card title={`${up.rows.length} matches in the next 7 days`}
-                  sub="Kick-off in your local time. Our forecast is the Dixon-Coles model from current ratings, computed in your browser; Predict opens the full score matrix and markets."
+                  sub="Kick-off in your local time. Our forecast is the upgraded model: Dixon-Coles ratings adjusted for form, shot dominance, xG form and injuries (tested on past seasons, see Accuracy). Predict opens the full score matrix and markets."
                   right={<Link className="btn" to="/matches?view=upcoming">All fixtures</Link>}>
               <UpcomingTable rows={up.rows} maxHeight={460} />
             </Card>

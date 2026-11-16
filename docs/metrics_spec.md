@@ -1567,3 +1567,37 @@ scraping WhoScored, FotMob and SofaScore.
   item.
 - **Candidate, unreplicated:** rain adds goals beyond the market's over/under 2.5 line
   (+6.7 pp, ±5.1, q = 0.039, n = 3,776, single season). It's re-tested as data accrues.
+
+### 12.7 Forecast upgrade and the ledger (`forecast/upgrade.py`, `forecast/upcoming.py`)
+
+*Change, Nov 16 (asked for: "upgrade model"):*
+
+- **Model:** a Poisson adjustment on top of the chosen Dixon-Coles rates (offsets),
+  `log l' = log l + c + b·z` (home) and `- b·z` (away), with one shared coefficient per
+  standardised home-minus-away signal and a ridge penalty of 2. It is fitted walk-forward
+  by season.
+- **Core test** (11,968 matches, 2021-22 to 2025-26), RPS (lower is better):
+
+| Model | RPS | Paired t vs current |
+|---|---|---|
+| Current | 0.19790 | |
+| Elo | 0.19769 | |
+| Upgraded, days ahead | 0.19658 | -6.4 |
+| Upgraded, at line-ups | 0.19640 | -6.7 |
+| Closing line | 0.19109 | |
+
+  - "Days ahead" adds congestion, European matches either side, last-5 points, and shot
+    and corner dominance.
+  - "At line-ups" adds rotation and missing regulars.
+  - Both are better in every test season and every league, and close 19-22% of the gap
+    to the market.
+- **FotMob era** (trained on 2024-25, tested on 2025-26 onward, 4,852 matches): adding
+  FotMob xG form and injured value share improves RPS from 0.20761 to 0.20683 (paired
+  t -2.5). The production set (computable before a fixture after the Transfermarkt freeze:
+  last-5 points, shot and corner dominance, xG form, injured share) scores the same.
+- **Shipped:** upcoming fixtures use the production set (`forecast.upcoming`). The app's
+  upcoming lists show it; the predictor stays plain Dixon-Coles plus the user's sliders.
+- **Ledger (spec 7.4):** `pitchvision ledger` (a daily step) appends each upcoming
+  fixture's forecast once per UTC day before kickoff to `data/ledger/predictions.csv`.
+  Rows are never rewritten. Matches are graded on the last forecast before kickoff and
+  published on the Accuracy page. The first rows were logged on 2026-11-16.

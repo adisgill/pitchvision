@@ -1,5 +1,6 @@
-// Upcoming fixtures (FotMob schedule) with our Dixon-Coles forecast computed in the browser
-// from the current team ratings: the same model the predictor uses.
+// Upcoming fixtures (FotMob schedule) with our forecast: the pipeline's upgraded model
+// (Dixon-Coles + form, shot dominance, xG form and injuries; walk-forward tested) where it
+// has the fixture, otherwise plain Dixon-Coles computed in the browser from current ratings.
 import { Fragment, useMemo } from "react";
 import { Link } from "react-router-dom";
 import { Row, useQuery } from "../../db";
@@ -15,7 +16,8 @@ export const sinceSql = (hours = 3) =>
 
 /** Fixtures matching ``where`` (alias f) that haven't been played, soonest first. */
 export function useUpcoming(where: string, limit = 400) {
-  return useQuery(`select f.* from fixtures f
+  return useQuery(`select f.*, u.up_lh, u.up_la, u.rho as up_rho from fixtures f
+    left join upcoming_forecasts u on u.fm_match_id = f.fm_match_id
     where not f.finished and not f.cancelled and f.kickoff_utc >= ${sinceSql()} and (${where})
     order by f.kickoff_utc, f.competition_id limit ${limit}`);
 }
@@ -32,6 +34,10 @@ export function useRatings() {
 }
 
 export function forecast(f: Row, R: ReturnType<typeof useRatings>): Forecast | null {
+  if (f.up_lh != null && f.up_la != null) {
+    const s = summarise(scoreMatrix(f.up_lh, f.up_la, f.up_rho ?? -0.05));
+    return { h: s.home, d: s.draw, a: s.away, lh: f.up_lh, la: f.up_la, top: s.top[0] };
+  }
   const h = R.clubs.get(f.home_club), a = R.clubs.get(f.away_club);
   if (!h || !a) return null;
   // the home side's league sets home advantage; both ratings are on their own league's scale

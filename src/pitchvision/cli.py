@@ -58,6 +58,19 @@ def demo(
 
 
 @app.command()
+def ledger() -> None:
+    """Append today's forecasts for fixtures not yet kicked off to the append-only ledger
+    (data/ledger/predictions.csv). Existing rows are never rewritten."""
+    from pitchvision.db import connect
+    from pitchvision.forecast.upcoming import append_ledger
+
+    paths = get_paths()
+    with connect(paths, read_only=True) as con:
+        n = append_ledger(con, paths.data / "ledger" / "predictions.csv")
+    typer.echo(f"ledger: {n} new forecasts")
+
+
+@app.command()
 def version() -> None:
     """Print the version."""
     from importlib.metadata import version as v

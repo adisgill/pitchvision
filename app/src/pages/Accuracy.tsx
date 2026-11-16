@@ -4,7 +4,8 @@ import { Link } from "react-router-dom";
 import { useQuery } from "../db";
 import { css, fmt, LEAGUES } from "../lib/format";
 import { Figure } from "../ui/Figure";
-import { Card, DataTable, PageHead, Tile } from "../ui/kit";
+import { Card, ClubLink, DataTable, PageHead, Tile } from "../ui/kit";
+import { rps as rpsOf } from "./accuracyLedger";
 
 const MODELS = ["closing line", "elo", "dixon-coles blend", "base rates"];
 
@@ -20,6 +21,8 @@ export default function Accuracy() {
   const mkt = useQuery(`select * from market_eval where scope <> 'all' order by scope`);
   const relc = useQuery(`select metric, any_value(k90) k90 from reliability_c group by 1`);
   const rela = useQuery(`select * from reliability_a`);
+  const upg = useQuery(`select * from upgrade_eval`);
+  const led = useQuery(`select * from ledger`);
   const all = Object.fromEntries(wf.rows.filter((r) => r.league === "all").map((r) => [r.model, r]));
   const eq = Object.fromEntries(bt.rows.filter((r) => r.variant === "equal strength").map((r) => [r.zone, r.brier]));
   const gbm = xg.rows.find((r) => r.model === "gbm");
@@ -140,6 +143,104 @@ export default function Accuracy() {
           </Card>
         </div>
       </div>
+
+      <section className="section">
+        <h2>The forecast upgrade</h2>
+        <UpgradeSection rows={upg.rows} />
+      </section>
+
+      <section className="section">
+        <h2>Live track record</h2>
+        <LedgerSection rows={led.rows} />
+      </section>
     </>
+  );
+}
+
+const UP_MODELS = ["closing line", "upgraded: at line-ups", "upgraded: days ahead", "our model (current)"];
+
+function UpgradeSection({ rows }: { rows: any[] }) {
+  const core = rows.filter((r) => r.study.startsWith("core"));
+  const all = Object.fromEntries(core.filter((r) => r.league === "all").map((r) => [r.model, r]));
+  const fm = rows.filter((r) => r.study.startsWith("FotMob"));
+  const fmAll = Object.fromEntries(fm.map((r) => [r.model, r]));
+  const cur = all["our model (current)"]?.rps, mk = all["closing line"]?.rps, up = all["upgraded: days ahead"]?.rps, upl = all["upgraded: at line-ups"]?.rps;
+  const closed = cur && mk && up ? (cur - up) / (cur - mk) : null;
+  const plot = useMemo(() => {
+    const d = core.filter((r) => UP_MODELS.includes(r.model));
+    if (!d.length) return undefined;
+    const leagues = ["all", ...Object.keys(LEAGUES).filter((k) => d.some((r) => r.league === k))];
+    return (width: number) => ({
+      width, height: leagues.length * 30 + 70, marginLeft: 112,
+      x: { label: "Ranked probability score (lower is better)", grid: true },
+      y: { label: null, domain: leagues, tickFormat: (l: string) => (l === "all" ? "All leagues" : LEAGUES[l]) },
+      color: { domain: UP_MODELS, range: [css("--text"), css("--s3"), css("--s1"), css("--muted")], legend: true },
+      symbol: { domain: UP_MODELS, range: ["diamond2", "circle", "circle", "circle"] },
+      marks: [
+        Plot.dot(d, { y: "league", x: "rps", stroke: "model", fill: "model", symbol: "model", r: 5 }),
+        Plot.tip(d, Plot.pointer({ y: "league", x: "rps", title: (r: any) => `${r.model}: RPS ${r.rps.toFixed(5)} over ${fmt.n(r.n)} matches` })),
+      ],
+    });
+  }, [rows]);
+  return (
+    <div className="grid">
+      <div className="c12">
+        <div className="tiles">
+          <Tile label="Current model (RPS)" value={fmt.n(cur, 4)} delta="2021-22 to 2025-26" />
+          <Tile label="Upgraded, days ahead" value={fmt.n(up, 4)} delta={closed != null ? `closes ${fmt.pct(closed)} of the gap to the market` : ""} tone="up" />
+          <Tile label="Upgraded, at line-ups" value={fmt.n(upl, 4)} delta="adds rotation and missing regulars" tone="up" />
+          <Tile label="Closing line" value={fmt.n(mk, 4)} delta="still ahead" tone="down" />
+        </div>
+      </div>
+      <div className="c8">
+        {plot && <Figure title={closed != null ? `The upgrade closes ${fmt.pct(closed)} of our gap to the closing line` : "The forecast upgrade"}
+          subtitle="Our Dixon-Coles forecast plus what the research found the market prices and ratings miss (recent shot dominance, form, congestion, European matches; at line-ups also rotation and missing regulars). Fitted walk-forward: each season's forecasts only use earlier seasons. Better than the current model in each of the five test seasons (paired t = -6.4 days ahead, -6.7 at line-ups)."
+          source="football-data.co.uk, Transfermarkt" plot={plot} alt="Forecast error by model and league after the upgrade"
+          table={{ rows: core, cols: [["league", "League"], ["model", "Model"], ["rps", "RPS", (v) => v.toFixed(5)], ["n", "Matches"]] }} />}
+      </div>
+      <div className="c4 stack" style={{ gap: 16 }}>
+        <Card title="FotMob era: xG form and injuries help too">
+          <p className="small ink2">On 2025-26 onward ({fmt.n(fmAll["our model (current)"]?.n)} matches), adding each side's recent FotMob xG difference and its injured players' share of squad value
+            moves our score from {fmt.n(fmAll["our model (current)"]?.rps, 4)} to {fmt.n(fmAll["upgraded: FotMob era: + xG form, injuries"]?.rps, 4)} (closing line {fmt.n(fmAll["closing line"]?.rps, 4)}).
+            Recent xG form is the strongest single signal; raw points form gets a negative weight once it's in (results regress toward performance).</p>
+        </Card>
+        <Card title="What upcoming forecasts use">
+          <p className="small ink2">Upcoming matches use the signals known days ahead that are still available after the Transfermarkt freeze: last-5 points, shot and corner dominance,
+            FotMob xG form and the latest injury list. Congestion and European fixtures drop out until a current cup schedule is available.</p>
+        </Card>
+      </div>
+    </div>
+  );
+}
+
+function LedgerSection({ rows }: { rows: any[] }) {
+  const graded = rows.filter((r) => r.finished && r.outcome != null && r.home_goals != null);
+  const avg = graded.length ? graded.reduce((a, r) => a + rpsOf([Number(r.p_home), Number(r.p_draw), Number(r.p_away)], Number(r.outcome)), 0) / graded.length : null;
+  const first = rows.length ? rows.map((r) => String(r.logged_at)).sort()[0] : null;
+  const recent = [...graded].sort((a, b) => String(b.kickoff_utc).localeCompare(String(a.kickoff_utc))).slice(0, 30);
+  return (
+    <div className="grid">
+      <div className="c12">
+        <div className="tiles">
+          <Tile label="Forecasts logged before kickoff" value={fmt.n(rows.length)} delta={first ? `since ${first.slice(0, 10)}` : ""} />
+          <Tile label="Graded so far" value={fmt.n(graded.length)} delta="matches played since logging" />
+          <Tile label="Average RPS, graded" value={avg != null ? avg.toFixed(4) : "–"} delta={graded.length < 200 ? "too few to judge yet" : ""} />
+        </div>
+      </div>
+      <div className="c12">
+        <Card title="An append-only public ledger" sub="Every day, before kickoff, the forecast for each upcoming fixture is appended to a ledger that is never edited. Each match is graded on the last forecast made before it kicked off: no backfilling, no quiet revisions.">
+          {recent.length ? (
+            <DataTable rows={recent} maxHeight={420} cols={[
+              { key: "kickoff_utc", label: "Kickoff", fmt: (v) => String(v).slice(0, 10) },
+              { key: "home_name", label: "Home", fmt: (v, r) => <ClubLink id={r.home_club} name={v} /> },
+              { key: "home_goals", label: "Score", center: true, fmt: (v, r) => `${v}–${r.away_goals}` },
+              { key: "away_name", label: "Away", fmt: (v, r) => <ClubLink id={r.away_club} name={v} /> },
+              { key: "p_home", label: "Forecast H / D / A", num: true, fmt: (v, r) => `${fmt.pct(Number(v))} / ${fmt.pct(Number(r.p_draw))} / ${fmt.pct(Number(r.p_away))}` },
+              { key: "outcome", label: "RPS", num: true, fmt: (v, r) => rpsOf([Number(r.p_home), Number(r.p_draw), Number(r.p_away)], Number(v)).toFixed(3) },
+            ]} />
+          ) : <p className="small muted">No logged fixture has been played yet: the first forecasts were logged {first ? first.slice(0, 10) : "today"}, and grading starts with the next round of matches.</p>}
+        </Card>
+      </div>
+    </div>
   );
 }

@@ -260,6 +260,13 @@ TABLES: dict[str, str] = {
           on p.player_fm_id = u.player_fm_id""",
     "fm_weather": """select x.match_id, w.* exclude (fm_match_id) from stg.fm_weather w
                      join core.fm_matches_xw x using (fm_match_id) where x.match_id is not null""",
+    "upcoming_forecasts": """select fm_match_id, competition_id, season, kickoff_utc, home_club,
+                                    away_club, home_name, away_name, base_h, base_d, base_a,
+                                    p_home, p_draw, p_away, up_lh, up_la, rho
+                             from forecast.upcoming""",
+    "upgrade_eval": "select * from forecast.upgrade_eval",
+    "upgrade_coefs": "select * from forecast.upgrade_coefs",
+    "production_check": "select * from forecast.production_check",
     "ww_drivers": "select * from research.ww_drivers",
     "ww_stability": "select * from research.ww_stability",
     "ww_curves": "select * from research.ww_curves",
@@ -327,6 +334,14 @@ def build(publish_dir: Path = OUT) -> dict:
                 continue
             src = {"ww_fm_factors": "fm_factors", "ww_fm_factor_bins": "fm_factor_bins",
                    "ww_weather_goals": "fm_weather_goals"}.get(name, name)  # fmt: skip
+            if name in ("upcoming_forecasts", "production_check") and not has_table(
+                con, "forecast", "upcoming"
+            ):
+                continue
+            if name in ("upgrade_eval", "upgrade_coefs") and not has_table(
+                con, "forecast", "upgrade_eval"
+            ):
+                continue
             if name.startswith("ww_") and not has_table(con, "research", src):
                 continue
             if has_table(con, "core", "fm_matches_xw"):
@@ -366,6 +381,29 @@ def build(publish_dir: Path = OUT) -> dict:
             if has_table(con, "core", "team_matches")
             else None
         )
+        led = paths.data / "ledger" / "predictions.csv"
+        if led.exists() and has_table(con, "stg", "fm_fixtures"):
+            tmp = publish_dir / "ledger.parquet"
+            con.execute(f"""copy (
+                with l as (select * from read_csv('{led.as_posix()}', header = true,
+                                                  all_varchar = true)),
+                last as (select * from l where logged_at::timestamp < kickoff_utc::timestamp
+                         qualify row_number() over (partition by fm_match_id
+                                                    order by logged_at desc) = 1)
+                select last.*, f.finished, f.home_goals, f.away_goals,
+                       case when f.home_goals > f.away_goals then 0
+                            when f.home_goals = f.away_goals then 1 else 2 end outcome,
+                       (select count(*) from l l2 where l2.fm_match_id = last.fm_match_id) logs
+                from last left join stg.fm_fixtures f
+                  on f.fm_match_id = last.fm_match_id::bigint
+                order by all) to '{tmp.as_posix()}' (format parquet, compression zstd)""")
+            h = hashlib.sha256(tmp.read_bytes()).hexdigest()[:8]
+            final = publish_dir / f"ledger.{h}.parquet"
+            tmp.rename(final)
+            files["ledger"] = final.name
+            rows["ledger"] = con.execute(
+                f"select count(*) from read_parquet('{final.as_posix()}')"
+            ).fetchall()[0][0]
     version = hashlib.sha256(json.dumps(files, sort_keys=True).encode()).hexdigest()[:12]
     manifest = {
         "version": version,

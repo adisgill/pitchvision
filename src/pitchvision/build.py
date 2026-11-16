@@ -152,6 +152,12 @@ def run(strict: bool = True, daily: bool = False) -> dict:
 
                     out["what_wins"] = what_wins.build(con, paths)
                     out["fm_factors"] = fm_factors.build(con, paths)
+            if has_table(con, "research", "matchup_factor_frame"):
+                with stage("forecast: upgrade test and upcoming forecasts"):
+                    from pitchvision.forecast import upcoming, upgrade
+
+                    out["upgrade"] = upgrade.build(con, paths)
+                    out["upcoming"] = upcoming.build(con, paths)
         if (
             full
             and has_table(con, "forecast", "wf_predictions")
