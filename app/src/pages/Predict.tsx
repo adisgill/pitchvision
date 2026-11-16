@@ -9,9 +9,11 @@ import { rates, scoreMatrix, summarise } from "../lib/models";
 import { ScoreMatrix } from "../ui/charts";
 import { Figure } from "../ui/Figure";
 import {
-  Card, ClubLink, EntityPicker, Field, FormStrip, Loading, MatchLink, OutcomeBar, PageHead, Seg, Sparkline, Tile, useParam,
+  Card, ClubLink, EntityPicker, Field, FormStrip, Loading, MatchLink, OutcomeBar, PageHead, Seg, Sparkline, useParam,
 } from "../ui/kit";
 import { useUpcoming } from "./match/upcoming";
+import ForecastCard from "./predict/ForecastCard";
+import XgPad from "./predict/XgPad";
 
 const pctChange = (d: number) => `${d >= 0 ? "+" : "−"}${Math.abs((Math.exp(d) - 1) * 100).toFixed(0)}%`;
 
@@ -29,10 +31,13 @@ export default function Predict() {
   const [neutral, setNeutral] = useParam("neutral", "0");
   const [shP, setSh] = useParam("sh", "0");
   const [saP, setSa] = useParam("sa", "0");
+  const [xhP, setXh] = useParam("xh", "");
+  const [xaP, setXa] = useParam("xa", "");
+  const override = xhP && xaP ? { lh: Number(xhP), la: Number(xaP) } : null;
   const upcoming = useUpcoming("true", 10);
   const pick = (h: string, aw: string) => {
     const p = new URLSearchParams(window.location.hash.split("?")[1] ?? "");
-    p.set("h", h); p.set("a", aw); p.delete("sh"); p.delete("sa");
+    p.set("h", h); p.set("a", aw); ["sh", "sa", "xh", "xa"].forEach((k) => p.delete(k));
     window.location.hash = `#/predict?${p}`;
   };
   const hId = hP || defaults[0]?.club_id || "", aId = aP || defaults[1]?.club_id || "";
@@ -51,14 +56,15 @@ export default function Predict() {
       dfn: team.dc_dfn + (cross && adjustable ? (k ?? 0) / 2 : 0) - s,
     });
     const home = Number(H.dc_home);
-    const { lh, la } = rates(tf(H, fh, sh), tf(A, fa, sa), home, neutral === "1");
+    const base = rates(tf(H, fh, sh), tf(A, fa, sa), home, neutral === "1");
+    const { lh, la } = override ?? base;
     const rho = Number(rhoQ.rows.find((r) => r.competition_id === H.competition_id)?.rho ?? -0.05);
     const m = scoreMatrix(lh, la, rho);
     const s = summarise(m);
     let homeNil = 0, awayNil = 0;
     m.forEach((row, i) => row.forEach((p, j) => { if (i > 0 && j === 0) homeNil += p; if (j > 0 && i === 0) awayNil += p; }));
-    return { lh, la, rho, m, s, cross, adjustable, homeNil, awayNil, home };
-  }, [H, A, lt.rows, rhoQ.rows, sh, sa, neutral]);
+    return { lh, la, base, rho, m, s, cross, adjustable, homeNil, awayNil, home };
+  }, [H, A, lt.rows, rhoQ.rows, sh, sa, neutral, xhP, xaP]);
 
   const h2h = useQuery(H && A ? `select * from matches where played and ((home_club = ${lit(hId)} and away_club = ${lit(aId)})
                                  or (home_club = ${lit(aId)} and away_club = ${lit(hId)})) order by match_date desc limit 10` : null);
@@ -163,14 +169,33 @@ export default function Predict() {
 
       {model && s && H && A && (
         <>
-          <div className="tiles" style={{ marginBottom: 16 }}>
-            <Tile label={`${H.name} expected goals`} value={fmt.n(model.lh, 2)} />
-            <Tile label={`${A.name} expected goals`} value={fmt.n(model.la, 2)} />
-            <Tile label="Most likely score" value={`${s.top[0].h}–${s.top[0].a}`} delta={`${fmt.pct(s.top[0].p, 1)} · fair odds ${fmt.odds(s.top[0].p)}`} />
-            <Tile label="Both teams score" value={fmt.pct(s.btts)} delta={`over 2.5 goals ${fmt.pct(s.over25)}`} />
-          </div>
+          <ForecastCard home={H.name} away={A.name} comp={H.competition_id === A.competition_id ? H.competition_id : undefined} s={s}
+                        lh={model.lh} la={model.la} custom={!!override || sh !== 0 || sa !== 0} neutral={neutral === "1"} />
           <div className="grid">
-            <div className="c7">
+            <div className="c6">
+              <Card title="Drag the matchup" sub={override ? "You're overriding the model's expected goals. Every number on the page follows the puck."
+                : "Each point is a pair of expected-goals rates. Drag the puck to see how the result, scorelines and markets move."}>
+                <XgPad model={model.base} value={{ lh: model.lh, la: model.la }} rho={model.rho} home={H.name} away={A.name}
+                       onChange={(v) => {
+                         const p = new URLSearchParams(window.location.hash.split("?")[1] ?? "");
+                         if (v) { p.set("xh", v.lh.toFixed(2)); p.set("xa", v.la.toFixed(2)); } else { p.delete("xh"); p.delete("xa"); }
+                         history.replaceState(null, "", `#/predict?${p}`);
+                         setXh(v ? v.lh.toFixed(2) : null); setXa(v ? v.la.toFixed(2) : null);
+                       }} />
+              </Card>
+            </div>
+            <div className="c6">
+              <Card title="Every scoreline" sub={`Probability of each score, in %. ${H.name} goals down the side, ${A.name} across. Hover for fair odds.`}>
+                <ScoreMatrix m={model.m} home={H.name} away={A.name} />
+                <div className="small" style={{ marginTop: 10 }}>
+                  <div className="eyebrow" style={{ marginBottom: 4 }}>Likeliest scores</div>
+                  <div className="row" style={{ gap: 6 }}>
+                    {s.top.slice(0, 6).map((c) => <span key={`${c.h}-${c.a}`} className="pill">{c.h}–{c.a} · {fmt.pct(c.p, 1)}</span>)}
+                  </div>
+                </div>
+              </Card>
+            </div>
+            <div className="c6">
               <Card title="Result" sub="Win / draw / win, with fair (no-margin) decimal odds.">
                 <OutcomeBar h={s.home} d={s.draw} a={s.away} labels={[H.name, "Draw", A.name]} />
                 <div className="row between small" style={{ marginTop: 8 }}>
@@ -193,23 +218,11 @@ export default function Predict() {
                 </table>
               </Card>
             </div>
-            <div className="c5">
-              <Card title="Every scoreline" sub={`Probability of each score, in %. ${H.name} goals down the side, ${A.name} across. Hover for fair odds.`}>
-                <ScoreMatrix m={model.m} home={H.name} away={A.name} />
-                <div className="small" style={{ marginTop: 10 }}>
-                  <div className="eyebrow" style={{ marginBottom: 4 }}>Likeliest scores</div>
-                  <div className="row" style={{ gap: 6 }}>
-                    {s.top.slice(0, 6).map((c) => <span key={`${c.h}-${c.a}`} className="pill">{c.h}–{c.a} · {fmt.pct(c.p, 1)}</span>)}
-                  </div>
-                </div>
-              </Card>
-            </div>
-            <div className="c6">
+            <div className="c6 stack" style={{ gap: 16 }}>
               {gdPlot && <Figure title="Winning margin" subtitle="Probability of each goal difference (blue: home win, orange: away win, grey: draw)."
                                  source="Dixon-Coles model" plot={gdPlot} alt="Goal difference distribution"
                                  table={{ rows: [...s.gd.entries()].sort((a, b) => a[0] - b[0]).map(([g, p]) => ({ g, p })), cols: [["g", "Goal difference"], ["p", "Probability", (v) => fmt.pct(v, 1)]] }} />}
-            </div>
-            <div className="c6">
+
               {totPlot && <Figure title="Total goals" subtitle={`Expected total ${fmt.n(model.lh + model.la, 2)} goals.`} source="Dixon-Coles model" plot={totPlot} alt="Total goals distribution"
                                   table={{ rows: [...s.total.entries()].sort((a, b) => a[0] - b[0]).map(([t, p]) => ({ t, p })), cols: [["t", "Total goals"], ["p", "Probability", (v) => fmt.pct(v, 1)]] }} />}
             </div>

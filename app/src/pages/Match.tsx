@@ -10,6 +10,7 @@ import { LineupPitch, Pitch, ShotLayer } from "../ui/pitch";
 import { computeWp, WpPoint } from "./match/shared";
 import { WinProbChart, wpTitle } from "./match/WinProbChart";
 import { ScoreGrid, StatBars, Timeline } from "./match/parts";
+import ShotPlayback from "./match/ShotPlayback";
 
 export default function Match() {
   const id = decodeURIComponent(useParams().id ?? "");
@@ -38,6 +39,7 @@ export default function Match() {
   const fe = useQuery(`select * from fm_events where match_id = ${lit(id)} order by minute, minute_added nulls first`);
   const fs = useQuery(`select * from fm_team_match where match_id = ${lit(id)}`);
   const tl = useQuery(`select * from timelines where match_id = ${lit(id)} order by minute`);
+  const fsh = useQuery(`select * from fm_shots where match_id = ${lit(id)}`);
   const wpp = useQuery(`select term, coef from wp_params`);
   const ea = useQuery(`select * from matches_a where canonical_match_id = ${lit(id)}`);
   const a = ea.rows[0]?.canonical_match_id === id ? ea.rows[0] : undefined;
@@ -219,6 +221,7 @@ export default function Match() {
           </Card>
         </div>
 
+        {fsh.rows.length > 0 && fsh.rows[0].match_id === id && <ShotPlayback rows={fsh.rows} m={m} />}
         {a?.provider === "wyscout" && shots.rows.length > 0 && shots.rows[0].match_id === Number(a.match_id) && <ShotSection shots={shots.rows} m={m} />}
 
         <div className="c12">

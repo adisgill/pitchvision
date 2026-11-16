@@ -1,5 +1,6 @@
 import * as Plot from "@observablehq/plot";
 import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { lit, useQuery } from "../../db";
 import { css, fmt } from "../../lib/format";
 import { Figure } from "../../ui/Figure";
@@ -42,7 +43,7 @@ export default function RaceTab({ league, season }: { league: string; season: nu
   const pts = useMemo(() => series(ms.rows), [ms.rows]);
   const table = useMemo(() => computeTable(ms.rows), [ms.rows]);
   const maxN = Math.max(0, ...pts.map((p) => p.n));
-  const [mode, setMode] = useState<"points" | "position" | "gap">("points");
+  const [mode, setMode] = useState<"table" | "points" | "position" | "gap">("table");
   const [upTo, setUpTo] = useState(0);
   const [playing, setPlaying] = useState(false);
   const [picked, setPicked] = useState<string[]>([]);
@@ -63,7 +64,7 @@ export default function RaceTab({ league, season }: { league: string; season: nu
     const leaderAt = new Map<number, number>();
     vis.forEach((p) => leaderAt.set(p.n, Math.max(leaderAt.get(p.n) ?? -1, p.pts)));
     const data = vis.map((p) => ({ ...p, gap: p.pts - (leaderAt.get(p.n) ?? p.pts) }));
-    const y = mode === "points" ? "pts" : mode === "position" ? "pos" : "gap";
+    const y = mode === "points" || mode === "table" ? "pts" : mode === "position" ? "pos" : "gap";
     const hl = new Map(picked.map((id, i) => [id, css(`--s${i + 1}`)]));
     const grey = data.filter((p) => !hl.has(p.club)), color = data.filter((p) => hl.has(p.club));
     const ends = [...new Map(data.map((p) => [p.club, p])).values()].filter((p) => hl.has(p.club));
@@ -88,7 +89,7 @@ export default function RaceTab({ league, season }: { league: string; season: nu
     <>
       <Loading state={ms} />
       <div className="filters">
-        <Field label="Show"><Seg value={mode} onChange={setMode} options={[["points", "Points"], ["position", "Position (bump)"], ["gap", "Gap to leader"]]} label="Measure" /></Field>
+        <Field label="Show"><Seg value={mode} onChange={setMode} options={[["table", "Table replay"], ["points", "Points"], ["position", "Position (bump)"], ["gap", "Gap to leader"]]} label="Measure" /></Field>
         <Field label={`After match ${n} of ${maxN}`}>
           <div className="row" style={{ gap: 8, minWidth: 260 }}>
             <button className="btn" onClick={() => { if (n >= maxN) setUpTo(1); setPlaying((p) => !p); }} aria-label={playing ? "Pause" : "Play the season"}>
@@ -100,7 +101,16 @@ export default function RaceTab({ league, season }: { league: string; season: nu
         </Field>
       </div>
       <HighlightPicker teams={table.map((t) => ({ id: t.club_id, name: t.name }))} picked={picked} onChange={setPicked} />
-      {plot && (
+      {mode === "table" && pts.length > 0 && (
+        <div className="card">
+          <div className="card-head"><div>
+            <p className="fig-title">The table after match {n} of {maxN}</p>
+            <p className="fig-sub">Press play and watch the table re-sort itself match by match; drag the slider to any point of the season. Highlighted teams are marked; top and bottom places are shaded.</p>
+          </div></div>
+          <TableReplay pts={pts} n={n} picked={picked} zones={{ top: 4, bottom: 3 }} />
+        </div>
+      )}
+      {mode !== "table" && plot && (
         <Figure title={mode === "position" ? "League position, match by match" : mode === "gap" ? "How far behind the leader every team has been" : "The points race"}
                 subtitle={<>Highlighted teams in colour (pick up to three above); everyone else in grey. Hover any line for the team, points and that match's result.
                   {mode === "position" && " Positions are after each team's n-th match, so rounds with postponed games are approximate."}</>}
@@ -113,3 +123,45 @@ export default function RaceTab({ league, season }: { league: string; season: nu
 }
 
 const ord = (n: number) => (n % 10 === 1 && n % 100 !== 11 ? "st" : n % 10 === 2 && n % 100 !== 12 ? "nd" : n % 10 === 3 && n % 100 !== 13 ? "rd" : "th");
+
+/** The league table after round ``n``: rows slide to their new places as the season plays. */
+function TableReplay({ pts, n, picked, zones }: { pts: Pt[]; n: number; picked: string[]; zones: { top: number; bottom: number } }) {
+  const snap = useMemo(() => {
+    const byClub = new Map<string, Pt[]>();
+    pts.forEach((p) => { if (!byClub.has(p.club)) byClub.set(p.club, []); byClub.get(p.club)!.push(p); });
+    const rows = [...byClub.values()].map((ps) => {
+      const k = Math.min(n, ps.length);
+      const cur = ps[k - 1], form = ps.slice(Math.max(0, k - 5), k).map((p) => p.res);
+      return { club: ps[0].club, name: ps[0].name, cur, form };
+    }).filter((r) => r.cur);
+    rows.sort((a, b) => b.cur.pts - a.cur.pts || b.cur.gd - a.cur.gd || b.cur.gf - a.cur.gf || a.name.localeCompare(b.name));
+    return rows;
+  }, [pts, n]);
+  const pos = new Map(snap.map((r, i) => [r.club, i]));
+  const order = [...snap].sort((a, b) => a.club.localeCompare(b.club)); // stable DOM order, so rows move instead of re-mounting
+  const maxPts = Math.max(1, ...snap.map((r) => r.cur.pts));
+  const RH = 34;
+  return (
+    <div className="replay" style={{ height: snap.length * RH + 30 }}>
+      <div className="rp-head"><span>#</span><span>Team</span><span className="r">P</span><span className="r">GD</span><span>Last 5</span><span className="r">Pts</span></div>
+      {order.map((r) => {
+        const i = pos.get(r.club)!;
+        const hl = picked.indexOf(r.club);
+        const zone = i < zones.top ? "top" : i >= snap.length - zones.bottom ? "bottom" : "";
+        return (
+          <div key={r.club} className={`rp-row ${zone}`} style={{ transform: `translateY(${30 + i * RH}px)` }}>
+            <span className="ps">{i + 1}</span>
+            <span className="tm">{hl >= 0 && <i style={{ background: `var(--s${hl + 1})` }} />}<Link to={`/team/${encodeURIComponent(r.club)}`}>{r.name}</Link></span>
+            <span className="r num">{r.cur.n}</span>
+            <span className="r num">{fmt.signed(r.cur.gd, 0)}</span>
+            <span className="fm5">{r.form.map((f, k) => <b key={k} className={f}>{f}</b>)}</span>
+            <span className="pt">
+              <span className="pbar"><span style={{ width: `${(r.cur.pts / maxPts) * 100}%` }} /></span>
+              <b>{r.cur.pts}</b>
+            </span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}

@@ -5,8 +5,9 @@ import { lit, useQuery } from "../db";
 import { ageOn, fmt, LEAGUES, POSITION_NAMES, seasonLabel } from "../lib/format";
 import { ClubLink, Loading, PageHead, Tabs, Tile, useParam } from "../ui/kit";
 import Impact from "./player/Impact";
-import { FmSeason, fmSeasonLabel } from "./player/fotmob";
+import { FmSeason } from "./player/fotmob";
 import Overview from "./player/Overview";
+import ScoutCard from "./player/ScoutCard";
 import PitchTab from "./player/PitchTab";
 import Similar from "./player/Similar";
 import Value from "./player/Value";
@@ -43,7 +44,8 @@ export default function Player() {
   return (
     <>
       <Loading state={bio} />
-      {p && (
+      {p && latest && <ScoutCard id={id} bio={p} latest={latest} age={age} />}
+      {p && !latest && !fm.loading && (
         <PageHead
           eyebrow={[pos ? POSITION_NAMES[pos] : p.position, p.sub_position && p.sub_position !== p.position ? p.sub_position : null].filter(Boolean).join(" · ")}
           title={p.name}
@@ -57,12 +59,9 @@ export default function Player() {
             {p.contract_expiration_date && <span>Contract to {fmt.dayYear(p.contract_expiration_date)}</span>}
           </span>} />
       )}
-      {p && (
+      {p && !latest && !fm.loading && (
         <div className="tiles" style={{ marginBottom: 6 }}>
-          {latest && <Tile label={`${fmSeasonLabel(latest)} (current data)`} value={`${fmt.n(latest.goals)} G · ${fmt.n(latest.assists)} A`}
-                           delta={`${fmt.n(latest.minutes)} min · npxG ${fmt.n(latest.npxg_p90, 2)} + xA ${fmt.n(latest.xa_p90, 2)} per 90`} />}
-          {latest?.market_value ? <Tile label="Market value (FotMob, current)" value={fmt.eur(latest.market_value)} />
-            : !isFm && <Tile label="Market value (Transfermarkt)" value={fmt.eur(p.market_value_in_eur)} delta={p.last_season ? `as of ${seasonLabel(p.last_season)}` : undefined} />}
+          {!isFm && <Tile label="Market value (Transfermarkt)" value={fmt.eur(p.market_value_in_eur)} delta={p.last_season ? `as of ${seasonLabel(p.last_season)}` : undefined} />}
           {last && <Tile label={`${seasonLabel(last.season)} · ${LEAGUES[last.competition_id] ?? last.competition_id}`}
                          value={`${fmt.n(last.goals)} G · ${fmt.n(last.assists)} A`} delta={`${fmt.n(last.minutes)} minutes, ${fmt.pct(last.minutes_share)} of team minutes`} />}
           {c.rows.length > 0 && <Tile label="Top-league career (since 2012-13)" value={`${fmt.n(career.g)} G · ${fmt.n(career.a)} A`}
