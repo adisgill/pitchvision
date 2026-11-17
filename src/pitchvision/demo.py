@@ -323,11 +323,42 @@ TABLES: dict[str, str] = {
         left join {XW_CLUB} c on c.source = 'wyscout' and c.source_id = s.team_id::varchar
         left join {XW_PLAYER} p on p.source = 'wyscout' and p.source_id = s.player_id::varchar
         where s.provider = 'wyscout'""",
+    "team_shape": """select club_id, match_id, competition_id, season, match_date, home,
+                             opp_id, opp, gf, ga, pts, xpts, formation, opp_formation,
+                             family, manager,
+                             manager_slug, spell, source from research.team_shape""",
+    "manager_spells": "select * exclude (manager_key) from research.manager_spells",
+    "manager_formations": """select s.manager_slug, f.club_id, f.spell, f.formation, f.n, f.ppg,
+                                    f.over_pm from research.manager_formations f
+                             join research.manager_spells s using (club_id, spell)""",
+    "manager_shape": "select * from research.manager_shape",
+    "manager_shape_moves": "select * exclude (manager_key) from research.manager_shape_moves",
+    "manager_style_study": "select * from research.manager_style_study",
+    "formation_trends": "select * from research.formation_trends",
+    "formation_matchups": "select * from research.formation_matchups",
+    "formation_matchup_test": "select * from research.formation_matchup_test",
+    "style_reliability": "select * from research.style_reliability",
+    "team_style_fm": "select * from research.team_style_fm",
+    "team_gamestate": "select * from research.team_gamestate",
+    "gamestate_reliability": "select * from research.gamestate_reliability",
+    "spell_style": """select s.manager_slug, x.* exclude (manager_key) from research.spell_style x
+                      join research.manager_spells s using (club_id, spell)""",
     "team_style": """
         select coalesce(c.canonical_id, t.provider || '-' || t.team_id) club_id, t.*
         from metrics.team_style_a t
         left join {XW_CLUB} c on c.source = t.provider and c.source_id = t.team_id::varchar""",
 }
+
+
+TACTICS = {"team_shape": "team_shape", "manager_spells": "manager_spells",
+           "manager_formations": "manager_formations", "manager_shape": "manager_shape",
+           "manager_shape_moves": "manager_shape_moves",
+           "manager_style_study": "manager_style_study", "formation_trends": "formation_trends",
+           "formation_matchups": "formation_matchups",
+           "formation_matchup_test": "formation_matchup_test",
+           "style_reliability": "style_reliability", "team_style_fm": "team_style_fm",
+           "team_gamestate": "team_gamestate", "gamestate_reliability": "gamestate_reliability",
+           "spell_style": "spell_style"}  # fmt: skip
 
 
 def build(publish_dir: Path = OUT) -> dict:
@@ -356,6 +387,8 @@ def build(publish_dir: Path = OUT) -> dict:
             ):
                 continue
             if name.startswith("ww_") and not has_table(con, "research", src):
+                continue
+            if name in TACTICS and not has_table(con, "research", TACTICS[name]):
                 continue
             if has_table(con, "core", "fm_matches_xw"):
                 # Transfermarkt where it has the match (to July 2026), FotMob after that

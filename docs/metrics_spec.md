@@ -1601,3 +1601,58 @@ scraping WhoScored, FotMob and SofaScore.
   fixture's forecast once per UTC day before kickoff to `data/ledger/predictions.csv`.
   Rows are never rewritten. Matches are graded on the last forecast before kickoff and
   published on the Accuracy page. The first rows were logged on 2026-11-16.
+
+### 12.8 Formations, team style, tendencies and managers (`research/tactics.py`)
+
+*Change, Nov 16 (asked for: "formation analysis ... tendencies, strengths, weaknesses per
+team/manager"):*
+
+- **Formations, one provider per era.** Transfermarkt through 2023-24, FotMob from 2024-25.
+  On the 5,454 matches both cover, the exact labels agree on 67% and the managers on 94%
+  (after removing accents). Mixing the providers inside a season would invent shape
+  changes, so each season uses one. Variants such as "4-3-3 Attacking" become "4-3-3".
+  The family is back three (a 3 or a 5 first) or back four.
+- **Managers:** Transfermarkt's name where it has the match, else FotMob's. A FotMob name
+  that differs from Transfermarkt's for the same club and match on 5 or more matches is
+  mapped to Transfermarkt's spelling (e.g. Hans-Dieter Flick becomes Hansi Flick).
+- **Spells** are unbroken runs of league matches under one manager at a club. A caretaker
+  run of up to 3 matches between two runs of the same manager doesn't end the spell.
+  Points are compared with the closing line's expected points (3 × P(win) + P(draw)).
+- **Style profile** (FotMob, 2024-25 onward): 21 traits per team-season.
+  - Each trait has a split-half reliability (odd v even matches, league mean removed,
+    team-seasons with 16+ matches) and a per-match reliability derived from it.
+  - Each team gets its reliability at its own number of matches, and a z-score shrunk by
+    that reliability.
+  - Strengths, weaknesses and tendencies are only written from traits whose reliability
+    at the team's matches is 0.7 or more, and that sit in the league's top or bottom fifth.
+  - Holds up: passes, long-ball share and possession (0.93-0.96), territory, aerials and
+    box touches (0.89), open-play xG created (0.84), pressing proxy (0.79).
+  - Mostly noise within a season: set-piece xG conceded (0.36), xG per shot faced (0.38),
+    fast-break share (0.45), xG per shot taken (0.54), big chances conceded (0.56).
+- **Game state and match clock:**
+  - Measures: xG for and against per 90 when level, ahead and behind, and the share of xG
+    in each 15-minute block. Goal times come from FotMob's shot list, on the 94% of
+    matches whose shots reproduce the final score.
+  - Reliability: none of the tendencies holds up within a season. Ahead or behind v level,
+    and early or late share, all have split-half r between -0.05 and 0.06. So "sits back
+    when ahead" and "concedes late" are not shown as traits; the app shows the history
+    with that verdict.
+- **Formation matchups** (27,985 matches with both formations among the 8 most common):
+  - The statistic is the variance in results beyond the closing line explained by the
+    pairing (cells with 50+ matches).
+  - It is tested against 500 shuffles of the results within league-season.
+  - p = 0.39: no detectable effect. Same verdict as mirrored formations in 12.2.
+- **Does the shape follow the manager?**
+  - Sample: 459 moves to a new club, with spells of 15+ matches; both windows come from
+    the same provider era.
+  - Back-three share in the first 38 matches at the new club = 0.08 + 0.42 × the manager's
+    share at his last club (95% CI 0.32-0.52) + 0.27 × the club's share under its previous
+    manager (0.17-0.36).
+  - The modal formation matches the manager's old one in 36% of moves and the club's old
+    one in 38%; the chance level is 21%.
+- **Does the style follow the manager?** FotMob era, 95 moves, each spell's style as a
+  league z-score.
+  - The squad dominates: the club's previous style coefficient is 0.31-0.54.
+  - The manager's previous style still adds something for territory (0.28), pressing
+    (0.22), long-ball share (0.21) and possession (0.15). All of their CIs exclude 0.
+  - The manager adds nothing detectable for crosses or open-play xG.

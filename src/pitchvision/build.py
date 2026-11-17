@@ -158,6 +158,11 @@ def run(strict: bool = True, daily: bool = False) -> dict:
 
                     out["upgrade"] = upgrade.build(con, paths)
                     out["upcoming"] = upcoming.build(con, paths)
+        if has_table(con, "forecast", "wf_predictions") and has_table(con, "stg", "tm_games"):
+            with stage("research: formations, team style, managers"):
+                from pitchvision.research import tactics
+
+                out["tactics"] = tactics.build(con, paths)
         if (
             full
             and has_table(con, "forecast", "wf_predictions")
