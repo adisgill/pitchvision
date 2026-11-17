@@ -343,6 +343,16 @@ TABLES: dict[str, str] = {
     "gamestate_reliability": "select * from research.gamestate_reliability",
     "spell_style": """select s.manager_slug, x.* exclude (manager_key) from research.spell_style x
                       join research.manager_spells s using (club_id, spell)""",
+    "formation_profile": "select * from research.formation_profile",
+    "formation_slots": "select * from research.formation_slots",
+    "formation_style": "select * from research.formation_style",
+    "team_formation": "select * from research.team_formation",
+    "manager_formation": "select * from research.manager_formation",
+    "player_formation": "select * from research.player_formation where starts >= 3",
+    "player_formation_tm": "select * from research.player_formation_tm",
+    "reputation_checks": "select * from research.reputation_checks",
+    "reputation_reliability": "select * from research.reputation_reliability",
+    "reputation_matches": "select * from research.reputation_matches",
     "team_style": """
         select coalesce(c.canonical_id, t.provider || '-' || t.team_id) club_id, t.*
         from metrics.team_style_a t
@@ -358,7 +368,14 @@ TACTICS = {"team_shape": "team_shape", "manager_spells": "manager_spells",
            "formation_matchup_test": "formation_matchup_test",
            "style_reliability": "style_reliability", "team_style_fm": "team_style_fm",
            "team_gamestate": "team_gamestate", "gamestate_reliability": "gamestate_reliability",
-           "spell_style": "spell_style"}  # fmt: skip
+           "spell_style": "spell_style", "formation_profile": "formation_profile",
+           "formation_slots": "formation_slots", "formation_style": "formation_style",
+           "team_formation": "team_formation", "manager_formation": "manager_formation",
+           "player_formation": "player_formation",
+           "player_formation_tm": "player_formation_tm",
+           "reputation_checks": "reputation_checks",
+           "reputation_reliability": "reputation_reliability",
+           "reputation_matches": "reputation_matches"}  # fmt: skip
 
 
 def build(publish_dir: Path = OUT) -> dict:

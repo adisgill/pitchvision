@@ -163,6 +163,10 @@ def run(strict: bool = True, daily: bool = False) -> dict:
                 from pitchvision.research import tactics
 
                 out["tactics"] = tactics.build(con, paths)
+            with stage("research: formations, players in them, reputations"):
+                from pitchvision.research import formations
+
+                out["formations"] = formations.build(con, paths)
         if (
             full
             and has_table(con, "forecast", "wf_predictions")

@@ -1656,3 +1656,76 @@ team/manager"):*
   - The manager's previous style still adds something for territory (0.28), pressing
     (0.22), long-ball share (0.21) and possession (0.15). All of their CIs exclude 0.
   - The manager adds nothing detectable for crosses or open-play xG.
+
+### 12.9 Formations, players in them, managers with them, and reputations (`research/formations.py`)
+
+*Change, Nov 16 (asked for: "actual formations like 4-1-3-2 ... tendencies like 'park the
+bus' ... prove with stats ... how players perform in it + how managers play it"):*
+
+- **Slots and roles.**
+  - Every FotMob formation's slots are FotMob's line-up drawing positions, averaged over
+    each start. Small y is the left flank; Saka and Salah sit at y ≈ 0.8.
+  - Roles come from depth rows and width: the back row (LB/LCB/CB/RCB/RB, or wing-backs in
+    a five), the front row (ST, LST/RST, LW/ST/RW), and the middle rows (DM, CM, AM,
+    LM/RM, LW/RW, LWB/RWB behind a back three).
+  - Transfermarkt line-up slots give roles back to 2013-14.
+- **Formation profile:** usage per era, points beyond the closing line, the average pre-match
+  win chance of teams that pick the shape, and the share of recent starts.
+  - 25 shapes have 10+ starts since 2013.
+  - None of the common ones beats the odds; formation pairings don't either (12.8).
+- **How a shape changes play** (2024-25 onward):
+  - Each style stat is first adjusted for the match-up: a per-league regression on the
+    closing-line strength gap (and its square) and venue.
+  - Then, within a team-season, the stat in the shape is compared with the same team's
+    other shapes, weighted across team-seasons.
+  - Of the 90 shape-stat pairs with 20+ team-seasons, 12 are detectable, and all are small.
+    Examples: a 3-4-1-2 presses harder (−0.57 opponent passes per action); a 3-4-3 lets
+    fewer opponents into the box (−1.0 touches); a 3-4-2-1 has 0.8 points less possession.
+  - The shape matters much less than the team using it.
+- **Players by formation** (FotMob era, starts only):
+  - Measures: rating weighted by minutes, output per 90 and the team's points beyond the
+    odds, against the same player in all other shapes ("v other shapes", shown when there
+    are 5+ starts elsewhere).
+  - Formation pages rank players by rating, shrunk toward the shape's average with a prior
+    of 10 starts.
+  - Transfermarkt starts, goals and assists by formation are kept from 2013-14 to 2023-24.
+- **Managers by formation** (since 2013-14): points beyond the odds per manager and shape,
+  with a 95% interval and an empirical-Bayes shrunk value.
+  - 22 of 874 manager-shape pairs with 20+ matches beat the odds at 95%, and 14 fell short.
+    That's about what chance gives (22 each way), and the estimated true spread is zero.
+  - So "manager X is a 3-5-2 specialist" is not something these numbers can show. The
+    pages say so.
+- **Reputation checks** (2024-25 onward):
+  - Claims for clubs (pooled and per season) and for managers (pooled).
+  - Style claims are measured against what the match-up predicts: park the bus, park the
+    bus against bigger sides, press high, go long, live on the wings, play on the counter,
+    live off set pieces.
+  - "Changes shape for big games" compares how often the team leaves its usual formation
+    as underdog against other matches. Underdog: strength gap below −0.15; favourite:
+    above +0.15.
+  - Results claims use points beyond the closing line: big-game team, flat-track bully,
+    fortress at home.
+  - Each claim has a value with a 95% interval, a league percentile and a split-half
+    reliability for its kind (random halves of each team-season):
+    - **Can be real:** long ball 0.89, park the bus 0.84, press 0.78, wings 0.71, park the
+      bus as underdog 0.58, set pieces 0.52, counter 0.45.
+    - **Never repeats:** shape for big games 0.12, big-game team 0.10, fortress 0.09,
+      flat-track bully 0.00.
+  - Verdicts:
+    - "not a repeatable trait" if the kind's reliability is under 0.3;
+    - "too few matches" under 8;
+    - "true" if the interval clears zero, the effect reaches a minimum size and the team
+      is in the league's top fifth. Minimum sizes: 3 points of possession, share or
+      fast-break share; 1.5 points of long-ball share; 0.5 crosses; 0.5 opponent passes
+      per action;
+    - "leans that way" if the interval clears zero without that;
+    - "the opposite" if the interval is entirely below zero;
+    - otherwise "not proven".
+  - Deep-block matches: possession 10+ points and territory 8+ points below what the
+    match-up predicts. That's 3.4% of team-matches; 572 are listed as evidence.
+  - Check against public reputation:
+    - The clubs with the strongest "park the bus" verdict include Getafe, Union Berlin,
+      Toulouse, Millwall, Espanyol and Everton. Bordalás is among the top managers.
+    - Barcelona, PSG, Tottenham and City are "the opposite".
+    - Arsenal lean that way (2.1 points of possession below the match-up, 95%: 0.3 to 3.9;
+      5 deep-block matches in 86). They are clearly true for "lives off set pieces".

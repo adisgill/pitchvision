@@ -35,3 +35,20 @@ def test_caretaker_run_does_not_split_a_spell():
     assert sp[:4] == [1] * 4 and sp[6:9] == [1] * 3  # a's spell resumes
     assert sp[4:6] == [2, 2]  # the caretaker
     assert sp[9:] == [3] * 5  # a new manager
+
+
+def test_slot_roles():
+    from pitchvision.research.formations import _roles
+
+    # 4-1-3-2 as FotMob draws it (x = depth, y = width, small y is the left flank)
+    xy = [(0.1, 0.5), (0.29, 0.13), (0.29, 0.38), (0.29, 0.63), (0.29, 0.88), (0.49, 0.5),
+          (0.68, 0.21), (0.68, 0.5), (0.68, 0.79), (0.87, 0.3), (0.87, 0.7)]  # fmt: skip
+    g = pd.DataFrame(xy, columns=["x", "y"])
+    assert list(_roles(g).sort_index()) == ["GK", "LB", "LCB", "RCB", "RB", "DM", "LAM", "AM",
+                                            "RAM", "LST", "RST"]  # fmt: skip
+    # 3-4-2-1: wing-backs in the first midfield row behind a back three
+    xy = [(0.1, 0.5), (0.29, 0.21), (0.29, 0.5), (0.29, 0.79), (0.49, 0.13), (0.49, 0.38),
+          (0.49, 0.63), (0.49, 0.88), (0.68, 0.3), (0.68, 0.7), (0.87, 0.5)]  # fmt: skip
+    g = pd.DataFrame(xy, columns=["x", "y"])
+    assert list(_roles(g).sort_index()) == ["GK", "LCB", "CB", "RCB", "LWB", "LDM", "RDM", "RWB",
+                                            "LAM", "RAM", "ST"]  # fmt: skip
