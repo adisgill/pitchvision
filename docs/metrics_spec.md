@@ -1641,13 +1641,13 @@ team/manager"):*
   - The statistic is the variance in results beyond the closing line explained by the
     pairing (cells with 50+ matches).
   - It is tested against 500 shuffles of the results within league-season.
-  - p = 0.39: no detectable effect. Same verdict as mirrored formations in 12.2.
+  - p = 0.36: no detectable effect. Same verdict as mirrored formations in 12.2.
 - **Does the shape follow the manager?**
-  - Sample: 459 moves to a new club, with spells of 15+ matches; both windows come from
+  - Sample: 460 moves to a new club, with spells of 15+ matches; both windows come from
     the same provider era.
   - Back-three share in the first 38 matches at the new club = 0.08 + 0.42 × the manager's
-    share at his last club (95% CI 0.32-0.52) + 0.27 × the club's share under its previous
-    manager (0.17-0.36).
+    share at the last club (95% CI 0.32-0.52) + 0.27 × the club's share under its previous
+    manager (0.17-0.37).
   - The modal formation matches the manager's old one in 36% of moves and the club's old
     one in 38%; the chance level is 21%.
 - **Does the style follow the manager?** FotMob era, 95 moves, each spell's style as a

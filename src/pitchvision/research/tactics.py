@@ -19,8 +19,8 @@
 * ``formation_trends``: formation and family shares per league-season.
 * ``formation_matchups``: results beyond the closing line by formation pairing, with a
   permutation test of whether pairings matter at all.
-* ``manager_shape`` / ``manager_shape_moves``: does a manager's shape follow him to a new
-  club? Back-three share at the new club regressed on the manager's share at his previous
+* ``manager_shape`` / ``manager_shape_moves``: does a manager's shape move with the manager
+  to a new club? Back-three share at the new club regressed on the manager's share at the previous
   club and the new club's share under its previous manager.
 """
 
@@ -99,13 +99,19 @@ def family(f: str | None) -> str | None:
     return {"3": "Back three", "5": "Back three", "4": "Back four"}.get(f[0], "Other")
 
 
+# letters NFKD doesn't decompose into ASCII (keep in step with managerSlug in the app)
+TRANSLIT = str.maketrans({"æ": "ae", "Æ": "Ae", "ø": "o", "Ø": "O", "ß": "ss", "ł": "l", "Ł": "L",
+                          "đ": "d", "Đ": "D", "œ": "oe", "Œ": "Oe", "ı": "i", "þ": "th",
+                          "ð": "d"})  # fmt: skip
+
+
 def norm_name(s: pd.Series) -> pd.Series:
     import unicodedata
 
     def one(v):
         if not isinstance(v, str) or not v.strip():
             return None
-        v = unicodedata.normalize("NFKD", v).encode("ascii", "ignore").decode()
+        v = unicodedata.normalize("NFKD", v.translate(TRANSLIT)).encode("ascii", "ignore").decode()
         return re.sub(r"[^a-z]+", " ", v.lower()).strip() or None
 
     return s.map(one)
@@ -199,7 +205,7 @@ def shape_frame(con) -> pd.DataFrame:
 def number_spells(d: pd.DataFrame) -> pd.DataFrame:
     """Spell number per club: a new spell starts whenever the manager differs from the
     previous match with a known manager, except that a caretaker run of up to three matches
-    between two runs of the same manager (illness, a touchline ban) doesn't end his spell."""
+    between two runs of the same manager (illness, a touchline ban) doesn't end the spell."""
     k = d[d.manager_key.notna()]
     chg = (k.manager_key != k.groupby("club_id").manager_key.shift()).astype(int)
     run = chg.groupby(k.club_id).cumsum()
@@ -247,7 +253,7 @@ def spells(d: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
 
 
 def shape_study(d: pd.DataFrame, s: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """Back-three share at a manager's new club against (a) his share at his previous club
+    """Back-three share at a manager's new club against (a) the manager's share at the previous club
     and (b) the new club's share under its previous manager. Both windows from the same
     provider era, at least 15 matches each, first 38 matches of the new spell."""
     d = d[d.formation.notna() & d.manager_key.notna()].copy()
@@ -654,8 +660,8 @@ STUDY_TRAITS = [
 
 
 def style_study(ss: pd.DataFrame, s: pd.DataFrame) -> pd.DataFrame:
-    """FotMob era: a manager's new club's style (league z-score) regressed on his previous
-    club's style under him and the new club's style under its previous manager."""
+    """FotMob era: a manager's new club's style (league z-score) regressed on the manager's previous
+    club's style under that manager and the new club's style under its previous manager."""
     sp = ss.merge(s[["club_id", "spell", "start_date"]], on=["club_id", "spell"])
     rows = []
     for key, g in sp.sort_values("start_date").groupby("manager_key"):
