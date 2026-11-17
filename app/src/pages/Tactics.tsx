@@ -25,7 +25,7 @@ export default function Tactics() {
   const maxG = Math.max(0, ...grel.rows.map((r) => Math.abs(r.split_half_r)));
   return (
     <>
-      <PageHead eyebrow="Research · tactics" title="Shapes, styles and the managers who pick them"
+      <PageHead eyebrow="Research · tactics" title="Shapes, styles and the managers who pick them" right={<Link className="btn" to="/formations">Every formation →</Link>}
         lead={<>Formations for {c ? fmt.n(c.tm) : "every"} team-match since 2013, Opta team stats since 2024-25 and {c ? fmt.n(c.sp) : "every"} managerial spell.
           The question every time: is it a real, repeatable pattern, or a story told after the fact?</>} />
       <Loading state={shape} />
@@ -58,6 +58,11 @@ export default function Tactics() {
       <section className="section">
         <h2>What is a trait, and what is noise</h2>
         <div className="grid"><div className="c12">{rel.rows.length > 0 && <Reliability rows={rel.rows} g={grel.rows} />}</div></div>
+      </section>
+
+      <section className="section">
+        <h2>Reputations people "just know"</h2>
+        <Reputations />
       </section>
 
       <section className="section">
@@ -308,5 +313,57 @@ function Directory() {
         { key: "shape", label: "Main shape" },
       ]} />
     </Card>
+  );
+}
+
+const CLAIM_ORDER = ["park_bus", "long_ball", "press", "wings", "park_bus_big", "set_pieces", "counter", "shape_big", "big_game", "fortress", "flat_track"];
+
+function Reputations() {
+  const rel = useQuery(`select * from reputation_reliability`);
+  const [claim, setClaim] = useParam("claim", "park_bus");
+  const safe = claim.replace(/[^a-z_]/g, "");
+  const q = useQuery(`select r.*, c.name as club from reputation_checks r left join clubs c on c.club_id = r.id
+                      where r.who = 'club' and r.season = 0 and r.claim = '${safe}' and r.verdict = 'true' order by r.value desc limit 40`);
+  const m = useQuery(`select * from reputation_checks where who = 'manager' and claim = '${safe}' and verdict = 'true' and matches >= 30 order by value desc limit 15`);
+  const rows = CLAIM_ORDER.map((c) => rel.rows.find((r) => r.claim === c)).filter(Boolean) as Row[];
+  const cur = rel.rows.find((r) => r.claim === safe);
+  const plot = (width: number) => ({
+    width, height: rows.length * 26 + 50, marginLeft: 230, marginRight: 50,
+    x: { label: "How much a team's number repeats across a season (reliability)", domain: [0, 1], grid: true },
+    y: { label: null, domain: rows.map((r) => r.label) },
+    marks: [
+      Plot.barX(rows, { y: "label", x: (r: any) => Math.max(0, r.season_rel), fill: (r: any) => (r.season_rel >= 0.3 ? css("--s1") : css("--muted")), insetTop: 4, insetBottom: 4, rx: 2 }),
+      Plot.ruleX([0.3], { stroke: css("--text"), strokeDasharray: "3 3" }),
+      Plot.text(rows, { y: "label", x: (r: any) => Math.max(0, r.season_rel), text: (r: any) => fmt.n(Math.max(0, r.season_rel), 2), dx: 6, textAnchor: "start", fontSize: 10, fill: css("--text-2") }),
+      Plot.tip(rows, Plot.pointer({ y: "label", x: (r: any) => Math.max(0, r.season_rel), title: (r: any) => `${r.label}\n${r.question}\nsplit-half r ${fmt.n(r.split_half_r, 2)} over ${r.team_seasons} team-seasons` })),
+    ],
+  });
+  return (
+    <div className="grid">
+      <div className="c6">
+        {rows.length > 0 && <Figure title="Style reputations can be real; results reputations can't"
+          subtitle="Split-half reliability of each claim: a team-season's matches split at random, the claim measured in each half, and the halves correlated. Left of the dashed line (0.3) a claim doesn't repeat for any team, so 'big-game team', 'flat-track bully', 'fortress' and 'changes shape for big games' can't be proven for anyone, whatever one season says."
+          source="FotMob (Opta) team stats, closing odds, 2024-25 onward" plot={plot} alt="Reliability of each reputation claim"
+          table={{ rows, cols: [["label", "Claim"], ["season_rel", "Reliability", (v) => fmt.n(v, 2)], ["team_seasons", "Team-seasons"]] }} />}
+      </div>
+      <div className="c6 stack" style={{ gap: 16 }}>
+        <Card title={`Who it's true of: ${cur?.label?.toLowerCase() ?? ""}`} sub={cur ? `${cur.question} Clubs whose 95% interval clears zero, with an effect big enough to notice, in their league's top fifth, 2024-25 onward.` : undefined}
+              right={<select value={safe} onChange={(e) => setClaim(e.target.value)} aria-label="Claim">{rows.filter((r) => r.season_rel >= 0.3).map((r) => <option key={r.claim} value={r.claim}>{r.label}</option>)}</select>}>
+          <DataTable rows={q.rows} limit={12} maxHeight={360} cols={[
+            { key: "club", label: "Club", fmt: (v, r) => <Link to={`/team/${encodeURIComponent(r.id)}?tab=reputation`}>{v ?? r.id}</Link> },
+            { key: "competition_id", label: "League", fmt: (v) => LEAGUES[v] ?? v },
+            { key: "value", label: "Effect", num: true, fmt: (v, r) => <>{fmt.signed(v, 1)} <span className="muted xs">({fmt.signed(r.lo, 1)} to {fmt.signed(r.hi, 1)})</span></> },
+            { key: "matches", label: "Matches", num: true },
+          ]} />
+        </Card>
+        <Card title="Managers it's true of" sub="Same test on each manager's FotMob-era league matches (30+).">
+          <DataTable rows={m.rows} limit={8} cols={[
+            { key: "name", label: "Manager", fmt: (v, r) => <Link to={`/manager/${r.id}`}>{v}</Link> },
+            { key: "value", label: "Effect", num: true, fmt: (v, r) => <>{fmt.signed(v, 1)} <span className="muted xs">({fmt.signed(r.lo, 1)} to {fmt.signed(r.hi, 1)})</span></> },
+            { key: "matches", label: "Matches", num: true },
+          ]} />
+        </Card>
+      </div>
+    </div>
   );
 }

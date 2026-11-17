@@ -4,6 +4,7 @@ import { useParams } from "react-router-dom";
 import { lit, useQuery } from "../db";
 import { ageOn, fmt, LEAGUES, POSITION_NAMES, seasonLabel } from "../lib/format";
 import { ClubLink, Loading, PageHead, Tabs, Tile, useParam } from "../ui/kit";
+import FormationsTab from "./player/FormationsTab";
 import Impact from "./player/Impact";
 import { FmSeason } from "./player/fotmob";
 import Overview from "./player/Overview";
@@ -38,7 +39,7 @@ export default function Player() {
 
   if (!bio.loading && !p) return <><PageHead title="Player not found" lead={`No player with id ${id}.`} /></>;
   const effTab = tab === "season" && !hasFm && !fm.loading ? "overview" : tab;
-  const tabs: [string, string][] = [...(hasFm ? [["season", "This season"] as [string, string]] : []), ["overview", isFm ? "History" : "Overview"], ["value", "Value"], ["impact", "Impact"],
+  const tabs: [string, string][] = [...(hasFm ? [["season", "This season"] as [string, string]] : []), ["overview", isFm ? "History" : "Overview"], ["formations", "Formations"], ["value", "Value"], ["impact", "Impact"],
     ...(hasEvent ? [["pitch", "Pitch map"] as [string, string]] : []), ["similar", hasEvent ? "Similar & role" : "Similar"]];
 
   return (
@@ -74,6 +75,7 @@ export default function Player() {
       <Tabs tabs={tabs} value={effTab} onChange={setTab} />
       {effTab === "season" && hasFm && <FmSeason id={id} seasons={fm.rows} name={p?.name ?? id} />}
       {effTab === "overview" && <Overview id={id} seasonsC={c.rows} seasonsA={a.rows} seasonsF={fm.rows} />}
+      {effTab === "formations" && <FormationsTab id={id} name={p?.name ?? id} />}
       {effTab === "value" && <Value id={id} name={p?.name ?? id} />}
       {effTab === "impact" && <Impact id={id} />}
       {effTab === "pitch" && hasEvent && <PitchTab id={id} seasonsA={a.rows} name={p?.name ?? id} />}

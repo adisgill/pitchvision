@@ -9,6 +9,7 @@ import { formColor } from "../../lib/tactics";
 import { EffectBars } from "../../ui/charts";
 import { Figure, useWidth } from "../../ui/Figure";
 import { Card, Empty, Legend, Loading, Seg, useParam, useTip } from "../../ui/kit";
+import { ShapeStyle, WhoPlaysWhere } from "./ShapeDetail";
 
 const RES = { W: "var(--pos)", D: "var(--muted)", L: "var(--neg)" } as const;
 const res = (r: Row) => (r.gf > r.ga ? "W" : r.gf < r.ga ? "L" : "D") as keyof typeof RES;
@@ -51,6 +52,8 @@ export default function ShapeTab({ id, name }: { id: string; name: string }) {
           <p className="small" style={{ marginTop: 8 }}><Link to="/tactics">Formation matchups across the league →</Link></p>
         </Card>
       </div>
+      <WhoPlaysWhere id={id} name={name} />
+      <ShapeStyle id={id} name={name} />
       {seasons.length > 0 && <div className="c12 muted xs">Seasons {seasonLabel(seasons[0], comp)} to {seasonLabel(seasons[seasons.length - 1], comp)} available.</div>}
     </div>
   );

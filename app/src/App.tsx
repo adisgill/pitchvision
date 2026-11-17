@@ -24,6 +24,8 @@ const pages = {
   Managers: lazy(() => import("./pages/Managers")),
   Manager: lazy(() => import("./pages/Manager")),
   Tactics: lazy(() => import("./pages/Tactics")),
+  Formations: lazy(() => import("./pages/Formations")),
+  Formation: lazy(() => import("./pages/Formation")),
   Referees: lazy(() => import("./pages/Referees")),
   Factors: lazy(() => import("./pages/Factors")),
   Insights: lazy(() => import("./pages/Insights")),
@@ -54,7 +56,8 @@ export const NAV: { group: string; items: NavItem[] }[] = [
     { to: "/referees", label: "Referees", icon: "referee", desc: "Real differences, and a lot of noise" },
   ] },
   { group: "Research", items: [
-    { to: "/tactics", label: "Tactics", icon: "pitch", badge: "new", desc: "Shapes, styles, managers: what's real" },
+    { to: "/formations", label: "Formations", icon: "team", badge: "new", desc: "Every shape: who plays it, who plays it best" },
+    { to: "/tactics", label: "Tactics", icon: "pitch", badge: "new", desc: "Shapes, styles, reputations: what's real" },
     { to: "/insights", label: "What wins", icon: "predict", desc: "Which stats predict future points" },
     { to: "/factors", label: "Hidden factors", icon: "factors", desc: "Overlooked factors tested against the market" },
     { to: "/lab", label: "Model lab", icon: "lab", desc: "Win probability, xT and score matrices" },
@@ -255,6 +258,8 @@ export default function App() {
               <Route path="/managers" element={<pages.Managers />} />
               <Route path="/manager/:slug" element={<pages.Manager />} />
               <Route path="/tactics" element={<pages.Tactics />} />
+              <Route path="/formations" element={<pages.Formations />} />
+              <Route path="/formation/:f" element={<pages.Formation />} />
               <Route path="/referees" element={<pages.Referees />} />
               <Route path="/factors" element={<pages.Factors />} />
               <Route path="/insights" element={<pages.Insights />} />

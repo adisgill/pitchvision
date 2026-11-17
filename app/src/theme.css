@@ -668,3 +668,28 @@ table.heat td { transition: none; }
 .coefs { display: flex; flex-direction: column; gap: 14px; }
 .coef svg { display: block; width: 100%; height: 12px; margin: 6px 0 4px; }
 .coef b { font-family: var(--display); font-size: 1.35rem; }
+
+/* ---------- formations & reputations (spec 12.9) ---------- */
+.verdict-badge { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 2px; font-family: var(--display);
+  font-weight: 700; font-size: 0.8rem; letter-spacing: 0.06em; text-transform: uppercase; white-space: nowrap; border: 1px solid transparent; }
+.v-true { background: var(--pos); color: #fff; }
+.v-leans { border-color: var(--pos); color: var(--text); }
+.v-np { border-color: var(--rule-strong); color: var(--text-2); }
+.v-opp { background: var(--neg); color: #fff; }
+.v-noise { border-color: var(--rule-strong); color: var(--muted); text-decoration: line-through; text-decoration-thickness: 1px; }
+.v-few { color: var(--muted); border-color: var(--rule); }
+.claims { display: grid; grid-template-columns: repeat(auto-fill, minmax(330px, 1fr)); gap: 0; border-top: 1px solid var(--rule); }
+.claim { padding: 1rem 1.1rem 1rem 0; border-bottom: 1px solid var(--rule); display: flex; flex-direction: column; gap: 6px; }
+.claim h3 { margin: 0; font-size: 1.05rem; font-weight: 650; display: flex; justify-content: space-between; gap: 10px; align-items: center; }
+.claim .q { color: var(--muted); font-size: 0.8rem; margin: 0; }
+.claim .num-line { font-size: 0.88rem; color: var(--text-2); }
+.claim .num-line b { font-family: var(--display); font-size: 1.25rem; color: var(--text); margin-right: 4px; }
+.claim svg { display: block; width: 100%; height: 22px; }
+.fcards { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 14px; }
+.fcard-f { display: flex; flex-direction: column; gap: 8px; padding: 12px; border: 1px solid var(--rule); border-radius: 3px;
+  background: var(--surface); color: var(--text); text-decoration: none; }
+.fcard-f:hover { border-color: var(--text); }
+.fcard-f .nm { font-family: var(--display); font-weight: 700; font-size: 1.5rem; letter-spacing: 0.02em; line-height: 1; }
+.fcard-f .meta { display: flex; justify-content: space-between; font-size: 0.78rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+.fcard-f .pitchbox { width: 62%; margin: 0 auto; }
+.fpitch { max-width: 420px; margin: 0 auto; }

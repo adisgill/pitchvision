@@ -11,8 +11,9 @@ import TransfersTab from "./team/TransfersTab";
 import ManagersTab from "./team/ManagersTab";
 import ShapeTab from "./team/ShapeTab";
 import StyleTab from "./team/StyleTab";
+import ReputationTab from "./team/ReputationTab";
 
-const TABS: [string, string][] = [["overview", "Overview"], ["style", "Style"], ["shape", "Shape"], ["squad", "Squad"], ["pitch", "Pitch map"], ["results", "Results"],
+const TABS: [string, string][] = [["overview", "Overview"], ["style", "Style"], ["shape", "Shape"], ["reputation", "Reputation"], ["squad", "Squad"], ["pitch", "Pitch map"], ["results", "Results"],
   ["transfers", "Transfers"], ["managers", "Managers"]];
 
 export default function Team() {
@@ -46,6 +47,7 @@ export default function Team() {
       {tab === "overview" && <Overview id={id} name={name} />}
       {tab === "style" && <StyleTab id={id} name={name} />}
       {tab === "shape" && <ShapeTab id={id} name={name} />}
+      {tab === "reputation" && <ReputationTab id={id} name={name} />}
       {tab === "squad" && <Squad id={id} name={name} />}
       {tab === "pitch" && <PitchTab id={id} name={name} />}
       {tab === "results" && <Results id={id} name={name} />}

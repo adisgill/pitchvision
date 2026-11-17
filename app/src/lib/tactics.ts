@@ -77,3 +77,20 @@ export const ordinal = (n: number) => {
   const s = r % 100 >= 11 && r % 100 <= 13 ? "th" : ["th", "st", "nd", "rd"][r % 10] ?? "th";
   return `${r}${s}`;
 };
+
+/** Reputation verdicts (spec 12.9): badge class and short text. */
+export const VERDICT: Record<string, { cls: string; text: string }> = {
+  "true": { cls: "v-true", text: "True" },
+  "leans that way": { cls: "v-leans", text: "Leans that way" },
+  "not proven": { cls: "v-np", text: "Not proven" },
+  "the opposite": { cls: "v-opp", text: "The opposite" },
+  "not a repeatable trait": { cls: "v-noise", text: "Not a repeatable trait" },
+  "not enough matches": { cls: "v-few", text: "Too few matches" },
+};
+
+/** Manager-formation verdicts. */
+export const SHAPE_VERDICT: Record<string, string> = {
+  "better than the odds": "up", "worse than the odds": "down", "no clear edge": "",
+};
+
+export const encF = (f: string) => encodeURIComponent(f);

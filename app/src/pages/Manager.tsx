@@ -8,6 +8,8 @@ import { lit, Row, useQuery } from "../db";
 import { css, div, fmt, LEAGUES } from "../lib/format";
 import { formColor, formHex, formKey, FORMATIONS } from "../lib/tactics";
 import { Figure } from "../ui/Figure";
+import { encF } from "../lib/tactics";
+import { ReputationCards } from "../ui/Reputation";
 import { Card, ClubLink, DataTable, Legend, Loading, PageHead, Tile, useTip } from "../ui/kit";
 
 export default function Manager() {
@@ -17,6 +19,9 @@ export default function Manager() {
   const st = useQuery(`select s.*, m.team, m.start_date from spell_style s join manager_spells m using (club_id, spell)
                        where s.manager_slug = ${lit(slug)} order by m.start_date`);
   const mv = useQuery(`select * from manager_shape_moves where manager_slug = ${lit(slug)} order by start_date`);
+  const mf = useQuery(`select * from manager_formation where manager_slug = ${lit(slug)} and n >= 5`);
+  const rep = useQuery(`select * from reputation_checks where who = 'manager' and id = ${lit(slug)}`);
+  const rel = useQuery(`select * from reputation_reliability`);
   const spells = sp.rows;
   const name = spells[0]?.manager ?? slug.replace(/-/g, " ");
   const tot = useMemo(() => {
@@ -56,6 +61,35 @@ export default function Manager() {
       <div className="grid">
         <div className="c12"><Career spells={spells} name={name} /></div>
         <div className="c12"><Shapes spells={spells} forms={fq.rows} name={name} /></div>
+        {mf.rows.length > 0 && (
+          <div className="c12">
+            <Card title={(() => {
+                    const ok = mf.rows.filter((r) => r.verdict === "better than the odds"), bad = mf.rows.filter((r) => r.verdict === "worse than the odds");
+                    return ok.length ? `${name}'s teams beat the odds in a ${ok.map((r) => r.formation).join(" and a ")}`
+                      : bad.length ? `${name}'s teams fell short of the odds in a ${bad.map((r) => r.formation).join(" and a ")}`
+                      : `No shape stands out for ${name} once luck is allowed for`;
+                  })()}
+                  sub="League matches since 2013 in each formation (5+), points per match against the closing odds with a 95% interval. Across all managers, the number of shapes that clear the bar is about what luck alone produces, so treat a single green row with care.">
+              <DataTable rows={mf.rows} initialSort={{ key: "n", desc: true }} cols={[
+                { key: "formation", label: "Shape", fmt: (v) => <Link to={`/formation/${encF(v)}`}><b>{v}</b></Link> },
+                { key: "n", label: "Matches", num: true },
+                { key: "clubs", label: "Clubs", num: true },
+                { key: "first", label: "Seasons", fmt: (v, r) => `${v}–${String(r.last).slice(2)}` },
+                { key: "ppg", label: "PPG", num: true, fmt: (v) => fmt.n(v, 2) },
+                { key: "over_pm", label: "v odds / match", num: true, fmt: (v, r) => <span style={{ color: r.verdict === "better than the odds" ? "var(--up-text)" : r.verdict === "worse than the odds" ? "var(--critical)" : undefined }}>{fmt.signed(v, 2)} <span className="muted xs">± {fmt.n(1.96 * r.se, 2)}</span></span> },
+                { key: "verdict", label: "Verdict" },
+              ]} />
+            </Card>
+          </div>
+        )}
+        {rep.rows.length > 0 && (
+          <div className="c12">
+            <Card title={`${name}'s reputation, tested`}
+                  sub={`Since 2024-25 (${rep.rows[0].matches} league matches in FotMob's data). Style claims are measured against what the match-up predicts; results claims against the closing odds. Claims that never repeat for any team can't be proven for one.`}>
+              <ReputationCards rows={rep.rows} rel={rel.rows} name={name} />
+            </Card>
+          </div>
+        )}
         {st.rows.length > 0 && <div className="c12"><StyleBySpell rows={st.rows} name={name} /></div>}
         {mv.rows.length > 0 && (
           <div className="c12">
