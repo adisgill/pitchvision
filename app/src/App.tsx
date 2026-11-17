@@ -22,6 +22,8 @@ const pages = {
   Transfers: lazy(() => import("./pages/Transfers")),
   Market: lazy(() => import("./pages/Market")),
   Managers: lazy(() => import("./pages/Managers")),
+  Manager: lazy(() => import("./pages/Manager")),
+  Tactics: lazy(() => import("./pages/Tactics")),
   Referees: lazy(() => import("./pages/Referees")),
   Factors: lazy(() => import("./pages/Factors")),
   Insights: lazy(() => import("./pages/Insights")),
@@ -52,7 +54,8 @@ export const NAV: { group: string; items: NavItem[] }[] = [
     { to: "/referees", label: "Referees", icon: "referee", desc: "Real differences, and a lot of noise" },
   ] },
   { group: "Research", items: [
-    { to: "/insights", label: "What wins", icon: "predict", badge: "new", desc: "Which stats predict future points" },
+    { to: "/tactics", label: "Tactics", icon: "pitch", badge: "new", desc: "Shapes, styles, managers: what's real" },
+    { to: "/insights", label: "What wins", icon: "predict", desc: "Which stats predict future points" },
     { to: "/factors", label: "Hidden factors", icon: "factors", desc: "Overlooked factors tested against the market" },
     { to: "/lab", label: "Model lab", icon: "lab", desc: "Win probability, xT and score matrices" },
     { to: "/accuracy", label: "Accuracy", icon: "target", desc: "Every model scored in the open, plus the ledger" },
@@ -250,6 +253,8 @@ export default function App() {
               <Route path="/transfers" element={<pages.Transfers />} />
               <Route path="/market" element={<pages.Market />} />
               <Route path="/managers" element={<pages.Managers />} />
+              <Route path="/manager/:slug" element={<pages.Manager />} />
+              <Route path="/tactics" element={<pages.Tactics />} />
               <Route path="/referees" element={<pages.Referees />} />
               <Route path="/factors" element={<pages.Factors />} />
               <Route path="/insights" element={<pages.Insights />} />

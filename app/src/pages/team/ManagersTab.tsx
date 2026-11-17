@@ -1,7 +1,9 @@
 import * as Plot from "@observablehq/plot";
 import { useMemo } from "react";
+import { Link } from "react-router-dom";
 import { lit, useQuery } from "../../db";
 import { css, fmt } from "../../lib/format";
+import { managerSlug } from "../../lib/tactics";
 import { Figure } from "../../ui/Figure";
 import { Card, DataTable, Empty } from "../../ui/kit";
 import { stintsSql } from "./stints";
@@ -9,6 +11,8 @@ import { stintsSql } from "./stints";
 export default function ManagersTab({ id, name }: { id: string; name: string }) {
   const q = useQuery(`select * from (${stintsSql(`m.home_club = ${lit(id)} or m.away_club = ${lit(id)}`)}) where club_id = ${lit(id)} order by start_date`);
   const rows = q.rows;
+  const slugs = useQuery(`select distinct manager, manager_slug from manager_spells where club_id = ${lit(id)}`);
+  const slugOf = useMemo(() => new Map(slugs.rows.map((r) => [r.manager, r.manager_slug])), [slugs.rows]);
   const plot = useMemo(() => {
     if (!rows.length) return undefined;
     const d = rows.map((r) => ({ ...r, label: `${r.manager}` }));
@@ -35,7 +39,7 @@ export default function ManagersTab({ id, name }: { id: string; name: string }) 
       <div className="c12">
         <Card title="Every spell" sub="95% interval from the match-to-match spread: a short spell's figure is mostly noise.">
           <DataTable rows={rows} initialSort={{ key: "start_date", desc: true }} cols={[
-            { key: "manager", label: "Manager" },
+            { key: "manager", label: "Manager", fmt: (v) => <Link to={`/manager/${slugOf.get(v) ?? managerSlug(String(v))}`}>{v}</Link> },
             { key: "start_date", label: "From", fmt: (v) => fmt.date(v) },
             { key: "end_date", label: "To", fmt: (v) => fmt.date(v) },
             { key: "n", label: "Matches", num: true },

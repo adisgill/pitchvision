@@ -1,6 +1,7 @@
 // Custom SVG charts Plot doesn't do well: percentile radar (pizza), score matrix.
 import { ReactNode } from "react";
 import { fmt, inkOn, seq } from "../lib/format";
+import { useWidth } from "./Figure";
 import { useTip } from "./kit";
 
 export type RadarAxis = { key: string; label: string; group?: string };
@@ -90,19 +91,22 @@ export function ScoreMatrix({ m, home, away, max = 6 }: { m: number[][]; home: s
 }
 
 /** Horizontal diverging bars with error whiskers (effect sizes with intervals). */
-export function EffectBars({ rows, unit = "", height = 26 }: {
+export function EffectBars({ rows, unit = "", height = 28 }: {
   rows: { label: ReactNode; b: number; se: number; color?: string; note?: ReactNode }[]; unit?: string; height?: number;
 }) {
   const tip = useTip();
+  const [ref, W] = useWidth<HTMLDivElement>();
   const lim = Math.max(0.05, ...rows.map((r) => Math.abs(r.b) + 1.96 * r.se));
-  const W = 1000, lab = 330, plotW = W - lab - 20;
-  const x = (v: number) => lab + plotW / 2 + (v / lim) * (plotW / 2);
+  const narrow = W < 560;
+  const lab = Math.min(330, Math.round(W * (narrow ? 0.42 : 0.33))), plotW = W - lab - 24;
+  const x = (v: number) => lab + 12 + plotW / 2 + (v / lim) * (plotW / 2);
+  const fs = narrow ? 11.5 : 13;
   return (
-    <div>
-      <svg viewBox={`0 0 ${W} ${rows.length * height + 24}`} style={{ width: "100%", height: "auto" }} role="img" aria-label="Effect sizes with 95% intervals">
+    <div ref={ref}>
+      <svg width={W} height={rows.length * height + 24} style={{ display: "block" }} role="img" aria-label="Effect sizes with 95% intervals">
         <line x1={x(0)} x2={x(0)} y1={0} y2={rows.length * height} stroke="var(--axis)" />
-        {[-lim, -lim / 2, lim / 2, lim].map((t) => (
-          <text key={t} x={x(t)} y={rows.length * height + 16} textAnchor="middle" fontSize={11} fill="var(--muted)">{fmt.signed(t, 2)}</text>
+        {(narrow ? [-lim, lim] : [-lim, -lim / 2, lim / 2, lim]).map((t) => (
+          <text key={t} x={x(t)} y={rows.length * height + 16} textAnchor={t === -lim ? "start" : t === lim ? "end" : "middle"} fontSize={10.5} fill="var(--muted)">{fmt.signed(t, 2)}</text>
         ))}
         {rows.map((r, i) => {
           const y = i * height + height / 2;
@@ -111,7 +115,7 @@ export function EffectBars({ rows, unit = "", height = 26 }: {
             <g key={i} onPointerMove={(e) => tip.show(e, <><b>{fmt.signed(r.b, 3)}{unit}</b><div className="muted">95% interval {fmt.signed(r.b - 1.96 * r.se, 3)} to {fmt.signed(r.b + 1.96 * r.se, 3)}</div>{r.note}</>)}
                onPointerLeave={tip.hide}>
               <rect x={0} y={y - height / 2} width={W} height={height} fill="transparent" />
-              <text x={lab - 10} y={y + 4} textAnchor="end" fontSize={13} fill="var(--text)">{r.label}</text>
+              <text x={lab} y={y + 4} textAnchor="end" fontSize={fs} fill="var(--text)">{r.label}</text>
               <line x1={x(r.b - 1.96 * r.se)} x2={x(r.b + 1.96 * r.se)} y1={y} y2={y} stroke={c} strokeWidth={2} strokeLinecap="round" />
               <circle cx={x(r.b)} cy={y} r={5.5} fill={c} stroke="var(--surface)" strokeWidth={2} />
             </g>

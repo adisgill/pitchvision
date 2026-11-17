@@ -267,7 +267,7 @@ export function GameState({ team, name, comp, season, mine }: { team: string; na
         <div className="c12">
           {forms.some((f) => f.formation !== "unknown") ? (
             <Card title={`${name} mostly line up in a ${forms.find((f) => f.formation !== "unknown")!.formation}`}
-                  sub={`Starting formation as recorded by Transfermarkt, with results and xG per match in each.${forms.some((f) => f.formation === "unknown") ? " Matches after the Transfermarkt freeze (July 2026) have no recorded formation." : ""}`}>
+                  sub={`Starting formation (FotMob's labels from 2024-25), with results and xG per match in each.${forms.some((f) => f.formation === "unknown") ? " Some matches have no recorded formation." : ""}`}>
               <DataTable rows={forms} initialSort={{ key: "n", desc: true }} cols={[
                 { key: "formation", label: "Formation" }, { key: "n", label: "Matches", num: true },
                 { key: "ppg", label: "Points / match", num: true, fmt: (v) => fmt.n(v, 2) },
@@ -275,7 +275,7 @@ export function GameState({ team, name, comp, season, mine }: { team: string; na
               ]} />
             </Card>
           ) : (
-            <Card title="Formations" sub="No formations recorded for this season: Transfermarkt, our formation source, stopped updating in July 2026. The likely XI below shows their recent shape from line-ups." />
+            <Card title="Formations" sub="No formations recorded for this season yet. The likely XI below shows their recent shape from line-ups." />
           )}
         </div>
       </div>

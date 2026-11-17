@@ -19,14 +19,17 @@ export function teamMatchSql(comp: string, season: number) {
     const cols = TM_KEYS.map((k) => `${s}_${k} as ${k}, ${o}_${k} as ${k}_opp`).join(", ");
     return `select match_id, match_date, kickoff_utc, '${s[0]}' as side, ${s}_club as club_id, ${o}_club as opp_id,
       ${s}_team as team, ${o}_team as opp, ${s}_goals as gf, ${o}_goals as ga, ${s}_goals_ht as gf_ht,
-      ${o}_goals_ht as ga_ht, ${s}_formation as formation, ${s}_manager as manager,
+      ${o}_goals_ht as ga_ht, coalesce(${s}_shape, ${s}_formation) as formation, ${s}_manager as manager,
       ${s === "home" ? "mkt_h" : "mkt_a"} as p_win, mkt_d as p_draw, ${cols} from x`;
   };
   return `with x as (
       select t.*, m.match_date, m.kickoff_utc, m.home_club, m.away_club, m.home_team, m.away_team,
              m.home_goals, m.away_goals, m.home_goals_ht, m.away_goals_ht, m.home_formation, m.away_formation,
-             m.home_manager, m.away_manager, m.mkt_h, m.mkt_d, m.mkt_a
+             m.home_manager, m.away_manager, m.mkt_h, m.mkt_d, m.mkt_a,
+             hs.formation as home_shape, aw.formation as away_shape
       from fm_team_match t join matches m using (match_id)
+      left join team_shape hs on hs.match_id = m.match_id and hs.club_id = m.home_club
+      left join team_shape aw on aw.match_id = m.match_id and aw.club_id = m.away_club
       where m.played and m.competition_id = ${lit(comp)} and m.season = ${season})
     ${side("home")} union all ${side("away")}`;
 }

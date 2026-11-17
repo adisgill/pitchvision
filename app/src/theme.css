@@ -639,3 +639,32 @@ a.res:hover { background: var(--surface-2); }
 .fc-foot { border-top: 1px solid var(--rule); background: var(--surface-2); text-transform: none; letter-spacing: 0.02em; }
 .brandmark { font-family: var(--display); font-weight: 700; font-size: 1rem; letter-spacing: 0.02em; color: var(--text); }
 .brandmark b { color: var(--hi-ink); }
+
+/* ---------- team style read & verdicts (spec 12.8) ---------- */
+.dna { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0; border-top: 1px solid var(--rule); }
+.dna-col { padding: 0.9rem 1.1rem 0.4rem; border-left: 1px solid var(--rule); }
+.dna-col:first-child { border-left: 0; padding-left: 0; }
+.dna-col h3 { margin: 0 0 0.6rem; font-family: var(--display); font-size: 0.95rem; font-weight: 700; letter-spacing: 0.08em;
+  text-transform: uppercase; display: flex; align-items: center; gap: 0.5rem; }
+.dna-col h3::before { content: ""; width: 10px; height: 10px; border-radius: 2px; background: var(--muted); }
+.dna-col.good h3::before { background: var(--pos); }
+.dna-col.bad h3::before { background: var(--neg); }
+.dna-col.neutral h3::before { background: var(--text); }
+.dna-col ul { list-style: none; margin: 0; padding: 0; }
+.dna-col li { padding: 0.45rem 0; border-top: 1px solid var(--rule); display: flex; flex-direction: column; gap: 2px; }
+.dna-col li:first-child { border-top: 0; padding-top: 0; }
+.dna-col li b { font-size: 1rem; font-weight: 650; color: var(--text); }
+.dna-col li span { font-size: 0.8rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+@media (max-width: 760px) {
+  .dna { grid-template-columns: 1fr; }
+  .dna-col, .dna-col:first-child { border-left: 0; padding: 0.8rem 0 0.2rem; border-top: 1px solid var(--rule); }
+  .dna-col:first-child { border-top: 0; }
+}
+.verdict { border: 1px solid var(--rule-strong); border-left: 4px solid var(--text); background: var(--surface); padding: 0.75rem 1rem;
+  font-size: 0.88rem; line-height: 1.5; color: var(--text-2); border-radius: 2px; }
+.verdict b { color: var(--text); font-family: var(--display); font-size: 1rem; letter-spacing: 0.04em; text-transform: uppercase; margin-right: 0.35rem; }
+.fp-row:hover rect { fill: var(--lift); }
+table.heat td { transition: none; }
+.coefs { display: flex; flex-direction: column; gap: 14px; }
+.coef svg { display: block; width: 100%; height: 12px; margin: 6px 0 4px; }
+.coef b { font-family: var(--display); font-size: 1.35rem; }

@@ -6,6 +6,7 @@ import { css, fmt, LEAGUES, SIM_LEAGUES } from "../lib/format";
 import { EffectBars } from "../ui/charts";
 import { Figure } from "../ui/Figure";
 import { Card, ClubLink, DataTable, Field, Loading, PageHead, Select, Tile, useParam } from "../ui/kit";
+import { managerSlug } from "../lib/tactics";
 import { shrink, stintHalvesSql, stintsSql } from "./team/stints";
 
 export default function Managers() {
@@ -15,6 +16,8 @@ export default function Managers() {
   const where = league === "all" ? `m.competition_id in (${SIM_LEAGUES.map(lit).join(", ")})` : `m.competition_id = ${lit(league)}`;
   const q = useQuery(`select * from (${stintsSql(where)}) order by n desc`);
   const halves = useQuery(`select * from (${stintHalvesSql(where)}) where n >= 76`);
+  const slugs = useQuery(`select distinct manager, manager_slug from manager_spells`);
+  const slugOf = useMemo(() => new Map(slugs.rows.map((r) => [r.manager, r.manager_slug])), [slugs.rows]);
 
   const { rows, tau2 } = useMemo(() => {
     const s = shrink(q.rows, min);
@@ -116,7 +119,7 @@ export default function Managers() {
         <div className="c12">
           <Card title="All spells" sub="Shrunk: the raw figure pulled toward zero in proportion to its noise (empirical Bayes).">
             <DataTable rows={rows} initialSort={{ key: "shrunk", desc: true }} rank maxHeight={600} cols={[
-              { key: "manager", label: "Manager" },
+              { key: "manager", label: "Manager", fmt: (v) => <Link to={`/manager/${slugOf.get(v) ?? managerSlug(String(v))}`}>{v}</Link> },
               { key: "team", label: "Club", fmt: (v, r: Row) => <ClubLink id={r.club_id} name={v} /> },
               { key: "league", label: "League", fmt: (v) => LEAGUES[v] ?? v },
               { key: "start_date", label: "From", fmt: (v) => fmt.date(v) },
