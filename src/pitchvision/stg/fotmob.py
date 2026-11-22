@@ -58,7 +58,10 @@ def fixtures(root: Path) -> pd.DataFrame:
             })  # fmt: skip
     d = pd.DataFrame(rows)
     if len(d):
-        d["kickoff_utc"] = pd.to_datetime(d.kickoff_utc, utc=True).dt.tz_localize(None)
+        # FotMob mixes "...:00Z" and "...:00.000Z"; ISO8601 parses both
+        d["kickoff_utc"] = pd.to_datetime(d.kickoff_utc, utc=True, format="ISO8601").dt.tz_localize(
+            None
+        )
     return d
 
 
@@ -193,7 +196,7 @@ def match_tables(root: Path) -> dict[str, pd.DataFrame]:
     frames = {k: pd.DataFrame(v) for k, v in out.items()}
     if len(frames["matches"]):
         frames["matches"]["kickoff_utc"] = pd.to_datetime(
-            frames["matches"].kickoff_utc, utc=True
+            frames["matches"].kickoff_utc, utc=True, format="ISO8601"
         ).dt.tz_localize(None)
     return frames
 
