@@ -7,12 +7,25 @@ Set-Location $root
 New-Item -ItemType Directory -Force "data\logs" | Out-Null
 $log = Join-Path $root ("data\logs\daily-" + (Get-Date -Format "yyyy-MM-dd") + ".log")
 
+# Anything unexpected still leaves a FAILED line in the log instead of a silent stop.
+trap {
+    "[$(Get-Date -Format s)] FAILED: $_" | Out-File -Append -Encoding utf8 $log
+    exit 1
+}
+
 function Step($name, [scriptblock]$cmd) {
     "[$(Get-Date -Format s)] $name" | Out-File -Append -Encoding utf8 $log
-    & $cmd *>&1 | Out-File -Append -Encoding utf8 $log
-    if ($LASTEXITCODE -ne 0) {
-        "[$(Get-Date -Format s)] FAILED: $name (exit $LASTEXITCODE)" | Out-File -Append -Encoding utf8 $log
-        exit $LASTEXITCODE
+    # Windows PowerShell turns each stderr line of a redirected native command into an error
+    # record, and with "Stop" the first one (the build's progress logging) ends the script.
+    # Steps are judged by their exit code alone; stderr lines are logged as plain text.
+    $prev = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    & $cmd *>&1 | ForEach-Object { "$_" } | Out-File -Append -Encoding utf8 $log
+    $code = $LASTEXITCODE
+    $ErrorActionPreference = $prev
+    if ($code -ne 0) {
+        "[$(Get-Date -Format s)] FAILED: $name (exit $code)" | Out-File -Append -Encoding utf8 $log
+        exit $code
     }
 }
 
